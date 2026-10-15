@@ -44,8 +44,10 @@ function makePage(opt = {}) {
   const notifyChar = { addEventListener(_, cb) { notify = cb; }, async startNotifications() {} };
   const svc = { async getCharacteristic(u) { return u.endsWith('2b11') ? writeChar : notifyChar; } };
   const server = { async getPrimaryService() { return svc; } };
-  const dev = { name: 'Minger_H6001_TEST', id: 'abc', addEventListener() {}, gatt: { async connect() { if (opt.unreachable) throw new Error('GATT Server is disconnected.'); return server; }, disconnect() {} } };
+  const advListeners = []; let watched = 0;
+  const dev = { name: 'Minger_H6001_TEST', id: 'abc', addEventListener(t, f) { if (t === 'advertisementreceived') advListeners.push(f); }, removeEventListener() {}, gatt: { async connect() { if (opt.unreachable) throw new Error('GATT Server is disconnected.'); return server; }, disconnect() {} } };
 
+  if (opt.advert) dev.watchAdvertisements = async () => { watched++; if (opt.advert === 'sends') setTimeout(() => advListeners.forEach(f => f({})), 5); };
   let requested = 0; const clicks = []; let onLoad = null;
   const bt = opt.noBluetooth ? undefined : { async requestDevice() { requested++; return dev; } };
   if (bt && !opt.noGetDevices) bt.getDevices = async () => (opt.devices === undefined ? [dev] : opt.devices);
@@ -59,7 +61,7 @@ function makePage(opt = {}) {
   };
   ctx.window = ctx;
   vm.createContext(ctx); vm.runInContext(code, ctx);
-  return { els, sent, clicks, timers, dev, get requested() { return requested; }, start: async () => { await onLoad(); await wait(30); } };
+  return { els, sent, clicks, timers, dev, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
 }
 
 test('connects automatically to a known device, sets the clock and loads the stored timer', async () => {
@@ -71,6 +73,18 @@ test('connects automatically to a known device, sets the clock and loads the sto
   assert.equal(p.els.tactive.checked, true);
   assert.equal(p.sent.filter(f => f[0] === 0x33 && f[1] === 0x09).length, 1, 'exactly one clock packet');
   assert.equal(p.els.warn.hidden, true);
+});
+
+test('known device: waits for an advertisement (watchAdvertisements) before connecting', async () => {
+  const p = makePage({ advert: 'sends' }); await p.start();
+  assert.equal(p.watched, 1);
+  assert.match(p.els.status.textContent, /^Connected to Minger_H6001_TEST/);
+});
+
+test('known device: still tries to connect if watchAdvertisements() throws or is missing', async () => {
+  const p = makePage(); await p.start();      // mock has no watchAdvertisements
+  assert.equal(p.watched, 0);
+  assert.match(p.els.status.textContent, /^Connected to/);
 });
 
 test('no known device: the search button pulses and the first tap opens the chooser', async () => {

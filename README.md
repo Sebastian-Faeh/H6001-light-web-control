@@ -47,6 +47,10 @@ Details are in [DEVELOPMENT.md](DEVELOPMENT.md).
 - The behaviour at the end of the timer window has not been observed.
 - The bulb clock is set at every connection; after the daylight-saving change
   open the page once. Winter time is untested.
+- Automatic reconnection (`getDevices()`) works only while the bulb advertises, i.e.
+  while no other app is connected to it. After a failed attempt the Search button
+  selects the bulb again. Whether `watchAdvertisements()` fixes the first failure
+  ("Bluetooth Device is no longer in range") is untested.
 - Open questions are listed in [PROTOCOL.md](PROTOCOL.md).
 
 ## Authorship

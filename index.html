@@ -166,7 +166,13 @@
    getDevices() is missing in the browser, returns no device, or no device
    was ever chosen, the page opens the device chooser on the first tap.
    Browsers allow requestDevice() only after a user gesture, so the chooser
-   cannot open without a tap. In older Chrome versions getDevices() was behind
+   cannot open without a tap. A device from getDevices() can only be connected
+   after Chrome has seen it advertise (otherwise connect() fails with "Bluetooth
+   Device is no longer in range."), so the page calls watchAdvertisements() on
+   it first and waits up to 10 s for an advertisement. If that does not help,
+   the Search button selects the bulb again (a fresh scan always works). The bulb
+   advertises only while no other app (e.g. Govee) is connected to it.
+   In older Chrome versions getDevices() was behind
    chrome://flags/#enable-experimental-web-platform-features (see
    https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md,
    which may be outdated). The page writes into the log whether getDevices()
@@ -448,6 +454,28 @@ async function bind() {
   send([0xaa, 0x05, 0x01]);
 }
 
+// A device returned by getDevices() is not connectable until Chrome has seen it
+// advertise; otherwise connect() fails with "Bluetooth Device is no longer in
+// range." watchAdvertisements() makes Chrome scan for this one device. Where it
+// is missing or fails, the page tries to connect directly.
+async function waitForAdvert(dev, ms) {
+  if (typeof dev.watchAdvertisements !== 'function') { log('watchAdvertisements() not available, connecting directly.'); return; }
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  let seen = false;
+  const onAdv = () => { seen = true; };
+  dev.addEventListener('advertisementreceived', onAdv);
+  try {
+    await dev.watchAdvertisements(ac ? { signal: ac.signal } : undefined);
+    const t0 = Date.now();
+    while (!seen && Date.now() - t0 < ms) await sleep(100);
+    log(seen ? 'Bulb advertisement received.' : 'No advertisement from the bulb within ' + (ms / 1000) + ' s.');
+  } catch (e) { log('watchAdvertisements(): ' + e.name + ': ' + e.message); }
+  finally {
+    if (typeof dev.removeEventListener === 'function') dev.removeEventListener('advertisementreceived', onAdv);
+    if (ac) ac.abort();
+  }
+}
+
 function attach(dev) {
   if (device === dev) return;
   device = dev;
@@ -470,8 +498,8 @@ async function doSearch() {
 }
 async function connectKnown() {
   if (!knownDev) return doSearch();
-  try { attach(knownDev); await bind(); }
-  catch (e) { log('Connection failed: ' + e.message); setStatus('Bulb not reachable (' + e.message + '). Switched on and in range?'); }
+  try { setStatus('Looking for the bulb ...'); await waitForAdvert(knownDev, 10000); attach(knownDev); await bind(); }
+  catch (e) { log('Connection failed: ' + e.message); setStatus('Bulb not reachable (' + e.message + '). Switched on, in range and not connected to another app? "Search" selects it again.'); }
 }
 function armSearch(msg) {
   setStatus(msg + ' The next tap opens the search.');
@@ -520,10 +548,10 @@ async function startup() {
   const dev = devs.find(d => d.id === savedId) || devs[0];
   knownDev = dev;
   log('Auto-connecting to ' + (dev.name || dev.id) + ' ...');
-  try { attach(dev); await bind(); }
+  try { setStatus('Looking for the bulb ...'); await waitForAdvert(dev, 10000); attach(dev); await bind(); }
   catch (e) {
     log('Auto-connection failed: ' + e.message);
-    setStatus('Bulb not reachable (' + e.message + '). "Connect" tries again, "Search" selects another device.');
+    setStatus('Bulb not reachable (' + e.message + '). Switched on, in range and not connected to another app? "Connect" tries again, "Search" selects the device again.');
   }
 }
 window.addEventListener('load', startup);
