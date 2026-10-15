@@ -124,6 +124,22 @@ XOR checksum) is shared by many models. A reasonable approach:
 4. Update the tests with packets from your capture and describe the model in
    `PROTOCOL.md`.
 
+## Publish the page (GitHub Pages)
+
+A link to `index.html` on github.com shows the source code. To run the page it
+must be served as a web page:
+
+1. In the repository on GitHub open **Settings**, then **Pages**.
+2. Under **Build and deployment** choose **Deploy from a branch**, branch
+   `main`, folder `/ (root)`, and save.
+3. After a minute or two the page is available at
+   `https://<user>.github.io/<repository>/`, here
+   <https://sebastian-faeh.github.io/H6001-light-web-control/>.
+
+On a free GitHub account Pages needs a public repository. The address is
+HTTPS, which Web Bluetooth needs, and it is stable, so a home-screen shortcut
+and Chrome's remembered device permission both work with it.
+
 ## Contributing
 
 Keep the page a single file without external libraries. Keep the markers for

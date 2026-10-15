@@ -5,6 +5,10 @@ It switches the bulb, sets brightness and colour, and writes the bulb's
 built-in daily timer (sunrise or sunset scene), so the bulb runs it on its
 own. No Govee app or account is needed.
 
+**Open the page:** <https://sebastian-faeh.github.io/H6001-light-web-control/>
+(served by GitHub Pages). The link to `index.html` on github.com only shows the
+source code and does not run it.
+
 **Status:** experimental, tested on one bulb (firmware 2.01.05) with Chrome on
 Android. Only Google Chrome (Android or desktop) supports Web Bluetooth.
 
