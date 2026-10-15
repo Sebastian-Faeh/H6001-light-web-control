@@ -14,3 +14,17 @@ and reports whether the bulb accepted it.
 
 The protocol notes, open questions and acknowledgements are in the comment
 block at the top of the script in the HTML file.
+
+## Disclaimer
+
+Unofficial project. It is not affiliated with, endorsed by or supported by
+Govee. "Govee" is a trademark of its owner and is used here only to name the
+product this page is compatible with. Use at your own risk.
+
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE): free to use, copy and modify
+for noncommercial purposes. Commercial use requires separate permission from
+the copyright holder.
+
+Required Notice: Copyright 2026 Sebastian-Faeh (https://github.com/Sebastian-Faeh)
