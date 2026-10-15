@@ -64,6 +64,10 @@ Close the Govee app first: the bulb accepts one connection at a time. The log
 under "Device and log" in the page shows every packet sent and received. On
 Android, `chrome://inspect` on a computer shows the page's console.
 
+Testing the automatic reconnection needs a real bulb and the permission stored
+for the exact address you open (see "Automatic reconnection" in the README).
+The tests only simulate `getDevices()` and `watchAdvertisements()`.
+
 ## Explore the protocol
 
 1. Open `tools/lab.html`, connect and press "Read all". It sends the queries the

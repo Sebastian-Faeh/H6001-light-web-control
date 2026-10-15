@@ -39,6 +39,46 @@ the official app, and the behaviour of the page against a fake browser and a
 fake bulb. They do not use Bluetooth and cannot replace a try on a real bulb.
 Details are in [DEVELOPMENT.md](DEVELOPMENT.md).
 
+## Automatic reconnection (Chrome on Android)
+
+On load the page connects to the bulb that was chosen earlier. This needs
+`navigator.bluetooth.getDevices()`, which Chrome has offered behind a flag in
+some versions (see [implementation status](https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md),
+which may be outdated).
+
+1. Open the page once and choose the bulb with **Search**. The permission is
+   stored per address, so it has to be repeated for a new address (for
+   example GitHub Pages instead of a local file).
+2. Close the Govee app (a connected app stops the bulb from advertising).
+   The bulb needs power; the light may be off.
+3. Reload the page. The log must show `getDevices() available.`
+4. If it shows `getDevices() not available`: open `chrome://flags`, set
+   `#enable-experimental-web-platform-features` and, if listed,
+   `#enable-web-bluetooth-new-permissions-backend` to **Enabled**, and
+   relaunch Chrome.
+5. If the log shows `Auto-connection failed`: the page first waits up to 10 s
+   for an advertisement of the bulb (`watchAdvertisements()`), because
+   Chrome refuses to connect to a stored device it has not seen advertising
+   ("Bluetooth Device is no longer in range"). Check the log line after
+   `Auto-connecting`:
+
+| Log line | Meaning |
+|---|---|
+| `Bulb advertisement received.` | works; the connection follows |
+| `No advertisement from the bulb within 10 s.` | Chrome does not see the bulb: check that the bulb is powered, nothing else is connected, Chrome has the Android permission "Nearby devices", and location is on (needed for BLE scans on some Android versions; not confirmed for every device) |
+| `watchAdvertisements(): ...` | the function is blocked or missing: set the flag from step 4 |
+| `watchAdvertisements() not available, connecting directly.` | the page tries a plain connect, which may fail |
+
+If nothing helps, **Search** selects the bulb again; a fresh scan always
+finds it.
+
+**Verified:** once, on a Galaxy Tab Active5 (Android 16) with Chrome Stable
+and the GitHub Pages address: `getDevices() available.`, `Bulb advertisement
+received.`, connected within 1 s. Before the `watchAdvertisements()` step the
+same setup failed with "Bluetooth Device is no longer in range." Not recorded,
+and therefore unknown: the Chrome version and whether the flags from step 4
+were needed.
+
 ## Known limits
 
 - Only one daily timer window is used (timer id 1). Writes to id 0 were
@@ -47,10 +87,8 @@ Details are in [DEVELOPMENT.md](DEVELOPMENT.md).
 - The behaviour at the end of the timer window has not been observed.
 - The bulb clock is set at every connection; after the daylight-saving change
   open the page once. Winter time is untested.
-- Automatic reconnection (`getDevices()`) works only while the bulb advertises, i.e.
-  while no other app is connected to it. After a failed attempt the Search button
-  selects the bulb again. Whether `watchAdvertisements()` fixes the first failure
-  ("Bluetooth Device is no longer in range") is untested.
+- Automatic reconnection works only while the bulb advertises, i.e. while no
+  other app is connected to it (see the section above).
 - Open questions are listed in [PROTOCOL.md](PROTOCOL.md).
 
 ## Authorship
