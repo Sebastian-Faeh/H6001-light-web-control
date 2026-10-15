@@ -1,0 +1,10 @@
+{
+  "name": "h6001-light-web-control",
+  "version": "1.0.0",
+  "description": "Unofficial single-file Web Bluetooth page for the Govee H6001 LED bulb",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "test": "node --test"
+  }
+}

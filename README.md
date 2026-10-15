@@ -10,10 +10,40 @@ Android. Only Google Chrome (Android or desktop) supports Web Bluetooth.
 
 **Use:** open the page in Chrome, connect to the bulb (close the Govee app
 first), set start, end and scene, press Save. The page reads the timer back
-and reports whether the bulb accepted it.
+and reports whether the bulb accepted it. After saving, the bulb runs the
+timer on its own and the page does not need to stay connected.
 
-The protocol notes, open questions and acknowledgements are in the comment
-block at the top of the script in the HTML file.
+## What is in the repository
+
+| Path | Purpose |
+|---|---|
+| [`index.html`](index.html) | the page: a single file without dependencies |
+| [`PROTOCOL.md`](PROTOCOL.md) | the reverse-engineered Bluetooth protocol, with a status label per item |
+| [`DEVELOPMENT.md`](DEVELOPMENT.md) | running the tests, trying changes on a bulb, capturing the official app's traffic, adapting to another model |
+| [`tools/lab.html`](tools/lab.html) | raw command console for exploring the protocol |
+| [`tools/btsnoop_att.py`](tools/btsnoop_att.py) | lists the GATT traffic of an Android Bluetooth HCI snoop log |
+| [`tests/`](tests) | tests that run with Node.js and need no dependencies |
+
+## Tests
+
+```
+node --test
+```
+
+The tests check the packet formats byte for byte against packets captured from
+the official app, and the behaviour of the page against a fake browser and a
+fake bulb. They do not use Bluetooth and cannot replace a try on a real bulb.
+Details are in [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## Known limits
+
+- Only one daily timer window is used (timer id 1). Writes to id 0 were
+  silently discarded by the bulb in tests; the cause is unknown.
+- The scene (sunrise or sunset) applies to the bulb as a whole, not per timer.
+- The behaviour at the end of the timer window has not been observed.
+- The bulb clock is set at every connection; after the daylight-saving change
+  open the page once. Winter time is untested.
+- Open questions are listed in [PROTOCOL.md](PROTOCOL.md).
 
 ## Authorship
 
@@ -21,9 +51,9 @@ Developed by Sebastian-Faeh together with Claude (an AI model by Anthropic).
 The author supplied the bulb, captured the official app's Bluetooth traffic
 on Android, ran all tests on the real bulb and made the design decisions.
 Claude analysed the capture, derived the timer and clock commands, and wrote
-the page, its documentation and the test scripts. The code was written
-independently; the protocol background is credited in the comment block of
-`index.html`.
+the page, its documentation, the tools and the test scripts. The code was
+written independently; the protocol background is credited in the comment
+block of `index.html`.
 
 ## Disclaimer
 

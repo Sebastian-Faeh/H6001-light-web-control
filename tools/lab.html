@@ -1,0 +1,252 @@
+<!doctype html>
+<!-- H6001 lab tool (unofficial): raw command console for exploring the Bluetooth protocol of the Govee H6001 bulb. See ../DEVELOPMENT.md and ../PROTOCOL.md. Same licence as the main page (PolyForm Noncommercial 1.0.0, see ../LICENSE). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H6001 Lab Tool</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 0 auto; padding: 16px; background:#111; color:#eee; }
+  h1 { font-size: 1.15rem; }
+  h2 { font-size: 1rem; margin: 18px 0 6px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+  button { font-size: 1rem; padding: 10px 14px; margin: 4px 4px 4px 0; border-radius: 8px; border: 0; background:#2b6; color:#000; }
+  button.neutral { background:#556; color:#fff; }
+  button.warn { background:#c84; color:#000; }
+  button:disabled { opacity: .4; }
+  input[type=text] { width: 100%; box-sizing: border-box; font: .9rem monospace; padding: 8px; background:#222; color:#eee; border:1px solid #444; border-radius:6px; }
+  #status { margin-top: 10px; padding: 8px; background:#1b1b24; border-radius: 6px; font-size:.9rem; }
+  p.hint { font-size: .8rem; color:#aaa; margin: 4px 0; }
+  #log { font-family: monospace; font-size: .72rem; white-space: pre-wrap; word-break: break-all; margin-top: 10px; color:#9c9; background:#0b0b0b; padding:8px; border-radius:6px; width:100%; box-sizing:border-box; height:340px; border:0; resize:vertical; user-select: text; }
+</style>
+</head>
+<body>
+<h1>H6001 Lab Tool</h1>
+<p class="hint">For exploring the protocol, not for daily use. Raw commands can change settings of the bulb; the Govee app can correct them again. Close the Govee app first (the bulb accepts only one connection).</p>
+
+<button id="connect">Connect (choose device)</button>
+<button id="disconnect" class="neutral" disabled>Disconnect</button>
+<div id="status">Not connected.</div>
+
+<h2>Read (like the Govee app when it opens)</h2>
+<button id="readall" disabled>Read all</button>
+<button id="readtimers" disabled>Read timers only</button>
+<p class="hint">Timer queries: <code>aa 0a 00</code> and <code>aa 0a 01</code>. Each reply holds 5 data bytes.</p>
+
+<h2>Write timers</h2>
+<div id="slots"></div>
+<label>Send scene afterwards: <select id="afterscene" disabled><option value="0">04 00 sunrise</option><option value="1">04 01 sunset</option><option value="-1">none</option></select></label>
+<button id="writetimers" class="warn" disabled>Write both timers</button>
+<p class="hint">Format: <code>33 0a &lt;id&gt; &lt;start h&gt; &lt;start min&gt; &lt;end h&gt; &lt;end min&gt; &lt;enabled&gt;</code>. The official app writes both ids one after the other, about 1 s apart, and sends the scene afterwards. In tests the bulb accepted writes to id 1 but silently discarded writes to id 0, while acknowledging both. Always read back.</p>
+
+<h2>Set the bulb clock</h2>
+<button id="settime" disabled>Set clock (33 09)</button>
+<p class="hint">The official app sends this at every connection.</p>
+
+<h2>Switch</h2>
+<button id="on" disabled>On</button>
+<button id="off" class="neutral" disabled>Off</button>
+<button id="sc0" class="neutral" disabled>Scene sunrise (04 00)</button>
+<button id="sc1" class="neutral" disabled>Scene sunset (04 01)</button>
+<p class="hint">04 00 is confirmed as sunrise (app label and bulb behaviour). 04 01 is presumably sunset (sent by the app after choosing sunset, not seen running).</p>
+
+<h2>Raw command</h2>
+<input type="text" id="raw" value="aa 0a 00" disabled>
+<p class="hint">Hex bytes without checksum. The tool pads to 19 bytes and appends the XOR byte.</p>
+<button id="sendraw" class="warn" disabled>Send</button>
+
+<h2>Log</h2>
+<button id="copylog" class="neutral">Copy log</button>
+<button id="clearlog" class="neutral">Clear</button>
+<textarea id="log" readonly rows="14"></textarea>
+
+<script>
+// ==PURE-START==
+const SERVICE_UUID = '00010203-0405-0607-0809-0a0b0c0d1910';
+const CHAR_WRITE   = '00010203-0405-0607-0809-0a0b0c0d2b11';
+const CHAR_NOTIFY  = '00010203-0405-0607-0809-0a0b0c0d2b10';
+
+function frame(bytes) {                      // bytes = header, command, payload (max 19)
+  const f = new Uint8Array(20);
+  bytes.slice(0, 19).forEach((b, i) => f[i] = b & 255);
+  let x = 0;
+  for (let i = 0; i < 19; i++) x ^= f[i];
+  f[19] = x;
+  return f;
+}
+function hex(u8) { return Array.from(u8, b => b.toString(16).padStart(2, '0')).join(' '); }
+function parseHex(s) {
+  const t = s.replace(/0x/gi, ' ').replace(/[^0-9a-fA-F]+/g, ' ').trim();
+  if (!t) return [];
+  return t.split(' ').map(h => parseInt(h, 16));
+}
+// Clock packet: 33 09 | hh mm ss | weekday | 01 tzH tzM | day month | year (LE16) | epoch (LE32, UTC) | 00 00
+function timeFrame(d) {
+  const off = -d.getTimezoneOffset();        // minutes east of UTC
+  const ep = Math.floor(d.getTime() / 1000);
+  const y = d.getFullYear();
+  return frame([0x33, 0x09, d.getHours(), d.getMinutes(), d.getSeconds(), d.getDay(),
+    1, Math.floor(Math.abs(off) / 60), Math.abs(off) % 60,
+    d.getDate(), d.getMonth() + 1, y & 255, y >> 8,
+    ep & 255, (ep >>> 8) & 255, (ep >>> 16) & 255, (ep >>> 24) & 255, 0, 0]);
+}
+// Timer record: 33 0a <id> <start h> <start min> <end h> <end min> <enabled 0/1>
+function timerFrame(idx, sh, sm, eh, em, en) { return frame([0x33, 0x0a, idx, sh, sm, eh, em, en ? 1 : 0]); }
+function decodeTimer(v) {                    // v = reply aa 0a <id> <start h> <start min> <end h> <end min> <enabled>
+  const p = n => String(n).padStart(2, '0');
+  return { idx: v[2], sh: v[3], sm: v[4], eh: v[5], em: v[6], en: v[7] === 1,
+           text: p(v[3]) + ':' + p(v[4]) + ' to ' + p(v[5]) + ':' + p(v[6]) + (v[7] === 1 ? ', enabled' : ', off') };
+}
+// ==PURE-END==
+
+const $ = id => document.getElementById(id);
+const logLines = [];
+function log(m) {
+  logLines.push(new Date().toLocaleTimeString() + ' ' + m);
+  while (logLines.length > 400) logLines.shift();
+  $('log').value = logLines.join('\n');
+  $('log').scrollTop = 1e9;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+let device = null, wch = null, nch = null;
+let chain = Promise.resolve();
+
+function send(bytes, quiet) {
+  chain = chain.then(async () => {
+    if (!wch) return;
+    const f = (bytes instanceof Uint8Array) ? bytes : frame(bytes);
+    if (!quiet) log('TX ' + hex(f));
+    try {
+      if (wch.writeValueWithoutResponse) await wch.writeValueWithoutResponse(f); else await wch.writeValue(f);
+    } catch (e) { log('Write error: ' + e.message); }
+  });
+}
+
+function label(v) {
+  if (v[0] === 0xaa && v[1] === 0x04) return '  (brightness reply: ' + v[2] + ')';
+  if (v[0] === 0xaa && v[1] === 0x01) return '  (power reply: ' + v[2] + ')';
+  if (v[0] === 0xaa && (v[1] === 0x06 || v[1] === 0x07)) {
+    const s = Array.from(v.slice(2, 19)).map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('');
+    return '  (text: ' + s + ')';
+  }
+  if (v[0] === 0xaa && v[1] === 0x0a) return '  (timer id ' + v[2] + ': ' + decodeTimer(v).text + ')';
+  if (v[0] === 0xaa && v[1] === 0x05) return '  (mode ' + hex(v.slice(2, 4)) + (v[2] === 4 ? ': scene ' + (v[3] === 0 ? 'sunrise' : v[3] === 1 ? 'sunset' : v[3]) : '') + ')';
+  return '';
+}
+
+function onNotify(ev) {
+  const v = new Uint8Array(ev.target.value.buffer);
+  if (v[0] === 0xaa && v[1] === 0x01) return;            // do not log keep-alive replies
+  log('RX ' + hex(v) + label(v));
+  if (v[0] === 0xaa && v[1] === 0x0a && v[2] <= 1) fillSlot(decodeTimer(v));
+}
+
+// Timer input fields (ids 0 and 1)
+const p2 = n => String(n).padStart(2, '0');
+function buildSlots() {
+  const def = [{ s: '09:17', e: '08:15', a: false }, { s: '21:00', e: '21:38', a: true }];
+  $('slots').innerHTML = [0, 1].map(i =>
+    '<div style="margin:6px 0">Id ' + i + ': ' +
+    '<input type="time" id="s' + i + '" value="' + def[i].s + '" disabled> to ' +
+    '<input type="time" id="e' + i + '" value="' + def[i].e + '" disabled> ' +
+    '<label><input type="checkbox" id="a' + i + '"' + (def[i].a ? ' checked' : '') + ' disabled> enabled</label></div>').join('');
+}
+function fillSlot(t) {
+  $('s' + t.idx).value = p2(t.sh) + ':' + p2(t.sm);
+  $('e' + t.idx).value = p2(t.eh) + ':' + p2(t.em);
+  $('a' + t.idx).checked = t.en;
+}
+$('writetimers').onclick = async () => {
+  // Sequence of the official app: id 0, about 1 s pause, id 1, a few seconds pause, then scene 33 05 04 xx
+  for (const i of [0, 1]) {
+    const [sh, sm] = $('s' + i).value.split(':').map(Number);
+    const [eh, em] = $('e' + i).value.split(':').map(Number);
+    if ([sh, sm, eh, em].some(Number.isNaN)) { log('Id ' + i + ': time incomplete.'); return; }
+    send(timerFrame(i, sh, sm, eh, em, $('a' + i).checked));
+    await sleep(1200);
+  }
+  const sc = Number($('afterscene').value);
+  if (sc >= 0) { await sleep(2000); send([0x33, 0x05, 0x04, sc]); }
+  log('Timers written. Press "Read timers only" to check.');
+};
+buildSlots();
+
+function setUi(c) {
+  ['disconnect', 'readall', 'readtimers', 'settime', 'on', 'off', 'sc0', 'sc1', 'raw', 'sendraw', 'writetimers'].forEach(id => $(id).disabled = !c);
+  document.querySelectorAll('#slots input').forEach(e => e.disabled = !c);
+  $('afterscene').disabled = !c;
+  $('connect').disabled = c;
+  $('status').textContent = c ? 'Connected to ' + (device && device.name || '?') : 'Not connected.';
+}
+
+async function bind() {
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(SERVICE_UUID);
+  wch = await svc.getCharacteristic(CHAR_WRITE);
+  nch = await svc.getCharacteristic(CHAR_NOTIFY);
+  nch.addEventListener('characteristicvaluechanged', onNotify);
+  await nch.startNotifications();
+  setUi(true);
+  log('Connected, notifications active.');
+}
+
+function attach(dev) {
+  device = dev;
+  dev.addEventListener('gattserverdisconnected', () => {
+    log('Disconnected.'); wch = nch = null; setUi(false);
+  });
+}
+
+$('connect').onclick = async () => {
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE_UUID] });
+    attach(dev);
+    log('Connecting to ' + (dev.name || dev.id) + ' ...');
+    await bind();
+  } catch (e) { log('Error: ' + e.name + ': ' + e.message); }
+};
+$('disconnect').onclick = () => { if (device) device.gatt.disconnect(); };
+
+window.addEventListener('load', async () => {
+  if (!navigator.bluetooth) { log('Web Bluetooth not available (Chrome required).'); return; }
+  if (!navigator.bluetooth.getDevices) return;
+  try {
+    const devs = await navigator.bluetooth.getDevices();
+    if (devs.length) { attach(devs[0]); log('Auto-connecting to ' + (devs[0].name || '?') + ' ...'); await bind(); }
+  } catch (e) { log('Auto-connection not possible: ' + e.message); }
+});
+
+// Keep-alive like the official app: aa 01 every 2 s
+setInterval(() => { if (wch) send([0xaa, 0x01], true); }, 2000);
+
+async function readTimers() { send([0xaa, 0x0a, 0x00]); await sleep(300); send([0xaa, 0x0a, 0x01]); }
+$('readtimers').onclick = readTimers;
+$('readall').onclick = async () => {
+  const seq = [[0xaa, 0x06], [0xaa, 0x07, 0x03], [0xaa, 0x0b], [0xaa, 0x0a, 0x00], [0xaa, 0x0a, 0x01], [0xaa, 0x04], [0xaa, 0x05, 0x01]];
+  for (const s of seq) { send(s); await sleep(250); }
+};
+$('settime').onclick = () => { const f = timeFrame(new Date()); log('Set clock: ' + new Date().toString()); send(f); };
+$('on').onclick  = () => send([0x33, 0x01, 0x01]);
+$('off').onclick = () => send([0x33, 0x01, 0x00]);
+$('sc0').onclick = () => send([0x33, 0x05, 0x04, 0x00]);
+$('sc1').onclick = () => send([0x33, 0x05, 0x04, 0x01]);
+$('sendraw').onclick = () => {
+  const b = parseHex($('raw').value);
+  if (b.length < 2 || b.length > 19) { log('Raw command: 2 to 19 bytes required.'); return; }
+  send(b);
+};
+$('copylog').onclick = async () => {
+  const text = logLines.join('\n');
+  try { await navigator.clipboard.writeText(text); log('Log copied.'); return; } catch (e) { /* fallback below */ }
+  const ta = $('log');
+  ta.value = text; ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  if (ok) log('Log copied (fallback).');
+  else log('Copying is blocked. The whole text is selected: long-press the text box and choose "Copy".');
+};
+$('clearlog').onclick = () => { logLines.length = 0; $('log').value = ''; };
+setUi(false);
+</script>
+</body>
+</html>
