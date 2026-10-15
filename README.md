@@ -53,9 +53,9 @@ which may be outdated).
    The bulb needs power; the light may be off.
 3. Reload the page. The log must show `getDevices() available.`
 4. If it shows `getDevices() not available`: open `chrome://flags`, set
-   `#enable-experimental-web-platform-features` and, if listed,
-   `#enable-web-bluetooth-new-permissions-backend` to **Enabled**, and
-   relaunch Chrome.
+   `#enable-experimental-web-platform-features` and
+   `#enable-web-bluetooth-new-permissions-backend` to **Enabled** (both were
+   set in the verified setup), and relaunch Chrome.
 5. If the log shows `Auto-connection failed`: the page first waits up to 10 s
    for an advertisement of the bulb (`watchAdvertisements()`), because
    Chrome refuses to connect to a stored device it has not seen advertising
@@ -73,11 +73,14 @@ If nothing helps, **Search** selects the bulb again; a fresh scan always
 finds it.
 
 **Verified:** once, on a Galaxy Tab Active5 (Android 16) with Chrome Stable
-and the GitHub Pages address: `getDevices() available.`, `Bulb advertisement
-received.`, connected within 1 s. Before the `watchAdvertisements()` step the
-same setup failed with "Bluetooth Device is no longer in range." Not recorded,
-and therefore unknown: the Chrome version and whether the flags from step 4
-were needed.
+and the GitHub Pages address, with both flags from step 4 set to Enabled
+(`#enable-experimental-web-platform-features` and
+`#enable-web-bluetooth-new-permissions-backend`): `getDevices() available.`,
+`Bulb advertisement received.`, connected within 1 s. Before the
+`watchAdvertisements()` step the same setup failed with "Bluetooth Device is no
+longer in range." Not recorded, and therefore unknown: the Chrome version, and
+whether each flag is needed on its own or whether Chrome Stable works without
+them.
 
 ## Known limits
 
