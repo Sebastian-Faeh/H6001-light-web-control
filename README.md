@@ -15,6 +15,16 @@ and reports whether the bulb accepted it.
 The protocol notes, open questions and acknowledgements are in the comment
 block at the top of the script in the HTML file.
 
+## Authorship
+
+Developed by Sebastian-Faeh together with Claude (an AI model by Anthropic).
+The author supplied the bulb, captured the official app's Bluetooth traffic
+on Android, ran all tests on the real bulb and made the design decisions.
+Claude analysed the capture, derived the timer and clock commands, and wrote
+the page, its documentation and the test scripts. The code was written
+independently; the protocol background is credited in the comment block of
+`index.html`.
+
 ## Disclaimer
 
 Unofficial project. It is not affiliated with, endorsed by or supported by
