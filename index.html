@@ -1,0 +1,566 @@
+<!doctype html>
+<!-- H6001-light-web-control (unofficial): single-file Web Bluetooth page. Full documentation is in the first comment block of the script at the end of this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H6001 Light Web Control</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 8px 10px 24px; background:#111; color:#eee; font-size: .95rem; }
+  h1 { font-size: 1.05rem; margin: 2px 0 6px; }
+  h2 { font-size: .85rem; margin: 12px 0 4px; color:#9ab; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #2a2a2a; padding-bottom: 2px; }
+  button { font-size: .95rem; padding: 9px 12px; border-radius: 8px; border: 0; background:#2b6; color:#000; min-height: 40px; }
+  button.neutral { background:#556; color:#fff; }
+  button.pulse { animation: pulse 1.2s infinite; }
+  button:disabled { opacity: .4; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(34,187,102,.45); } }
+  input[type=time], select { font-size: 1rem; padding: 5px 6px; background:#222; color:#eee; border:1px solid #444; border-radius:6px; min-height: 38px; }
+  input[type=range] { flex: 1; min-width: 0; height: 28px; }
+  input[type=checkbox] { width: 20px; height: 20px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
+  .row > * { margin: 0; }
+  .field { display: flex; flex-direction: column; font-size: .75rem; color:#aaa; gap: 2px; }
+  .chk { flex-direction: row; align-items: center; gap: 6px; font-size: .9rem; color:#eee; }
+  .line { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+  .line span { width: 72px; font-size: .8rem; color:#aaa; flex: none; }
+  #hue { background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); border-radius: 14px; -webkit-appearance: none; appearance: none; }
+  #hue::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 28px; background:#fff; border: 2px solid #000; border-radius: 6px; }
+  #sat { border-radius: 14px; -webkit-appearance: none; appearance: none; }
+  #sat::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 28px; background:#fff; border: 2px solid #000; border-radius: 6px; }
+  #status, #stored, #result { padding: 5px 8px; background:#1b1b24; border-radius: 6px; font-size:.8rem; margin: 4px 0; }
+  #result.ok { background:#16341f; }
+  #result.bad { background:#40201c; }
+  #warn { padding: 6px 8px; border-radius: 6px; font-size: .82rem; margin: 4px 0; }
+  #warn.err { background:#5a1d1d; }
+  #warn.soft { background:#4d4217; }
+  details { margin-top: 10px; font-size: .82rem; color:#bbb; }
+  summary { cursor: pointer; padding: 6px 0; color:#9ab; }
+  details p { margin: 6px 0; }
+  code, pre { font-family: monospace; font-size: .75rem; word-break: break-all; }
+  pre { background:#1b1b24; padding:6px; border-radius:6px; white-space: pre-wrap; user-select: all; margin: 4px 0; }
+  #log { font-family: monospace; font-size: .7rem; color:#9c9; background:#0b0b0b; width:100%; height:220px; border:0; border-radius:6px; padding:6px; }
+</style>
+</head>
+<body>
+<h1>H6001 Light Web Control <small style="font-weight:normal;color:#888;font-size:.7em">unofficial</small></h1>
+<div id="warn" hidden></div>
+
+<div class="row">
+  <button id="connect">Connect</button>
+  <button id="search" class="neutral">Search</button>
+</div>
+<div id="status">Not connected.</div>
+
+<h2>Timer</h2>
+<div class="row">
+  <label class="field">Start <input type="time" id="tstart" value="06:30" disabled></label>
+  <label class="field">End <input type="time" id="tend" value="07:30" disabled></label>
+  <label class="field chk"><input type="checkbox" id="tactive" checked disabled>enabled</label>
+</div>
+<div class="row">
+  <select id="scene" disabled>
+    <option value="0">Sunrise</option>
+    <option value="1">Sunset</option>
+  </select>
+  <button id="save" disabled>Save</button>
+  <button id="readback" class="neutral" disabled>Read</button>
+</div>
+<div id="stored">Stored in the bulb: not read yet.</div>
+<div id="result" hidden></div>
+
+<h2>Light</h2>
+<div class="row">
+  <button id="on" disabled>On</button>
+  <button id="off" class="neutral" disabled>Off</button>
+</div>
+<div class="line"><span>Brightness</span><input type="range" id="bright" min="1" max="255" value="255" disabled></div>
+<div class="line"><span>Hue</span><input type="range" id="hue" min="0" max="360" value="0" disabled></div>
+<div class="line"><span>Saturation</span><input type="range" id="sat" min="0" max="100" value="0" disabled></div>
+
+<details>
+  <summary>Notes</summary>
+  <p>Unofficial project, not affiliated with or supported by Govee. Govee is a trademark of its owner.</p>
+  <p>Close the Govee app first; the bulb accepts only one connection at a time.</p>
+  <p>After saving, the bulb runs the timer on its own. The page does not need to stay connected.</p>
+  <p>Saving first sets the bulb clock, then writes the timer to timer slot 1, selects the scene and reads the timer back as a check. The result is shown in the coloured box.</p>
+  <p>The scene applies to the bulb as a whole, not per timer. Switching on starts the selected scene. Choosing a colour ends the scene.</p>
+  <p>The bulb receives the time at every connection. Its own clock cannot be read, so the page does not compare times but always sets it. After the daylight-saving change on 25 Oct 2026, open the page once and connect.</p>
+  <p>On load the page connects to the last used device if Chrome allows it. Otherwise the first tap on the page starts the search (Chrome only allows the search after a touch).</p>
+  <p>Behaviour at the end of the timer window (switch off or not) has not been observed. Protocol details are in the source code.</p>
+</details>
+
+<details>
+  <summary>Device and log</summary>
+  <p>Name: <span id="devname">-</span></p>
+  <p>Device ID (assigned by Chrome):</p>
+  <pre id="devid">-</pre>
+  <div class="row">
+    <button id="copyid" class="neutral">Copy ID</button>
+    <button id="copylog" class="neutral">Copy log</button>
+    <button id="clearlog" class="neutral">Clear</button>
+  </div>
+  <p>Service UUID:</p>
+  <pre>00010203-0405-0607-0809-0a0b0c0d1910</pre>
+  <textarea id="log" readonly></textarea>
+</details>
+
+<script>
+/*
+==============================================================================
+ H6001-light-web-control - unofficial Web Bluetooth control page
+==============================================================================
+
+ PURPOSE
+   Control a Govee H6001 Bluetooth LED bulb and program its built-in timer
+   (for example a sunrise or sunset scene at a fixed time) from a browser,
+   without the Govee app and without a Govee account. The bulb runs the stored
+   timer by itself; the page does not need to stay connected.
+
+ STATUS
+   Experimental. Written from a reverse-engineered protocol (see below).
+   Tested by the author on one bulb (H6001, firmware 2.01.05, hardware
+   1.00.05 as reported by the bulb) with Chrome on an Android 16 tablet.
+   Use at your own risk. Not affiliated with, endorsed by or supported by
+   Govee. "Govee" is a trademark of its owner and is used here only to name
+   the product this page is compatible with.
+
+ FEATURES
+   - Connect to the bulb; reconnect automatically to the last used device on
+     page load (when the browser supports it), otherwise open the device search
+     on the first tap.
+   - One daily timer window (start time, end time, enabled) written to timer
+     slot 1 of the bulb, with read-back verification after writing.
+   - Choice of the bulb scene (sunrise or sunset).
+   - Power on/off, brightness (1-255), colour (hue and saturation sliders).
+   - Sets the bulb clock on every connection.
+   - Browser check with a warning outside Chrome.
+   - Single HTML file, no external libraries, no network access, no data leaves
+     the device. Only the last device id and name are stored in localStorage.
+
+ REQUIREMENTS
+   - Google Chrome (Android or desktop) with Web Bluetooth. Other browsers:
+     Firefox and Safari (including Chrome on iOS) do not implement Web
+     Bluetooth. Chromium-based browsers (Edge, Samsung Internet, Brave) may
+     work but are untested.
+   - The bulb must not be connected to another device (Govee app closed).
+   - Bluetooth enabled on the device. Chrome may ask for nearby-device or
+     location permission when searching for the bulb.
+   - The page works from a local file (file://) in Chrome; Web Bluetooth also
+     requires a secure context if served over the network (HTTPS).
+
+ USAGE
+   1. Open the page in Chrome. If a known device is found it connects
+      automatically; otherwise tap anywhere (or "Search") and pick the bulb
+      ("Minger_H6001_xxxx") in the Chrome dialog.
+   2. Set start, end, "enabled" and the scene, then press "Save". The result
+      box confirms (green) or reports (red) whether the bulb accepted the timer.
+   3. "Read" reloads the stored timer from the bulb into the fields.
+   4. After the daylight-saving change open the page once so that the bulb
+      clock is set again.
+
+ AUTOMATIC RECONNECTION
+   On load the page calls navigator.bluetooth.getDevices() and connects to the
+   device that was permitted earlier (the last used one is preferred). If
+   getDevices() is missing in the browser, returns no device, or no device
+   was ever chosen, the page opens the device chooser on the first tap.
+   Browsers allow requestDevice() only after a user gesture, so the chooser
+   cannot open without a tap. In older Chrome versions getDevices() was behind
+   chrome://flags/#enable-experimental-web-platform-features (see
+   https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md,
+   which may be outdated). The page writes into the log whether getDevices()
+   is available.
+
+ CLOCK
+   The bulb has no known command to read its clock. Therefore the page does not
+   compare times but sets the clock at every connection (the same behaviour as
+   the official app).
+
+ PROTOCOL (reverse engineered)
+   Source of the findings: the bulb's GATT table and a Bluetooth HCI snoop log
+   of the official app talking to the author's own bulb, plus experiments with
+   this page. No app code was decompiled. Status per item: [verified] seen in
+   the log and confirmed by the behaviour of the bulb, [observed] seen in the
+   log only, [assumed] inferred.
+
+   GATT
+     Service 00010203-0405-0607-0809-0a0b0c0d1910
+       Characteristic ...2b11  write / write without response   (commands)
+       Characteristic ...2b10  read / notify                     (replies)
+     A second service ...1912 with characteristic ...2b12 exists, purpose
+     unknown. The official app also writes 01 00 to descriptors of ...2b10.
+
+   FRAME (20 bytes)
+     byte 0      header: 0x33 = set command, 0xAA = query
+     byte 1      command
+     bytes 2-18  payload, zero padded
+     byte 19     XOR of bytes 0-18                                 [verified]
+   Replies to set commands echo header and command with an all-zero payload
+   (for example 33 0a 00 ...). That is an acknowledgement of receipt only: the
+   bulb also acknowledges timer writes it silently discards. Always read back.
+
+   COMMANDS
+     33 01 01 / 33 01 00        power on / off                      [verified]
+     aa 01                      power query and app keep-alive      [observed]
+                                (reply aa 01 01 = on, 00 = off); the page
+                                sends it every 2 s like the app.
+     33 04 vv                   brightness 0x00-0xFF                [verified]
+                                (0xFF is clearly brighter than 0x64)
+     aa 04                      brightness query, reply aa 04 vv    [verified]
+     33 05 02 rr gg bb          static colour                       [verified]
+                                (ff ff ff gives white)
+     33 05 04 00                scene "sunrise"                     [verified]
+                                (starts at power on; confirmed by the app label
+                                and by the bulb behaviour)
+     33 05 04 01                scene "sunset"                      [observed]
+                                (sent by the app after choosing sunset)
+     aa 05 01                   mode query, reply aa 05 04 ss       [observed]
+     33 09 ...                  set clock                           [verified]
+        hh mm ss  weekday  01 tzH tzM  day month yearLo yearHi
+        epoch (uint32 little endian, UTC)  00 00
+        Weekday: Monday=1 ... Thursday=4 observed; Sunday (0 or 7) not
+        observed. Time zone bytes 01 02 00 observed in summer time (UTC+2);
+        the meaning of the first byte (sign) and winter time (UTC+1)
+        are [assumed].
+     33 0a id sh sm eh em en    write timer record                  [verified]
+     aa 0a n                    read timer record n (0 or 1)        [verified]
+        reply aa 0a id sh sm eh em en
+        sh sm = start hour/minute, eh em = end hour/minute, en = 1 enabled.
+        The reply for n is the n-th record sorted by start time, not the
+        record with id n; take the id from byte 2 of the reply. The record
+        repeats daily; no weekday field was found.
+        At the start time the bulb switches on and runs the scene [verified
+        for sunrise]. What happens at the end time was not observed.
+     aa 06, aa 07 03            firmware / hardware strings         [observed]
+     aa 0b                      reply aa 0b 00 00 0f, meaning unknown
+
+   TIMER SLOTS
+     The bulb stores two records (ids 0 and 1). Writes with id 1 were accepted
+     in all tests (windows of 38 to 51 minutes, start two minutes after the
+     write was accepted). Writes with id 0 were silently discarded in the
+     tests, windows tried: 5, 15, 30 and 35 minutes; the cause (id 0 itself or
+     a minimum window length) is unknown. The page therefore uses id 1 only.
+
+ KNOWN LIMITATIONS AND OPEN QUESTIONS
+   - Behaviour at the end of the timer window unknown.
+   - Only one scene for all timers (the scene command is global).
+   - Winter time and negative UTC offsets of the clock command untested.
+   - Sunday encoding in the clock command untested.
+   - Sunset scene (01) not observed running on the bulb.
+   - Web Bluetooth availability varies by browser and version.
+
+ ACKNOWLEDGEMENTS
+   The idea of a browser-based LED controller via Web Bluetooth and the first
+   framing of the task are taken from
+     https://github.com/imshaikot/led-strip-web-bluetooth
+   Protocol background for Govee bulbs (frame layout, checksum, colour and
+   brightness commands) was gathered from the community reverse-engineering
+   work in
+     https://github.com/egold555/Govee-Reverse-Engineering
+     https://github.com/chvolkmann/govee_btled
+     https://github.com/Obi2000/Govee-H6199-Reverse-Engineering
+     https://github.com/BeauJBurroughs/Govee-H6127-Reverse-Engineering
+   No source code was copied from these projects; the code in this file was
+   written independently from the protocol information. The timer and clock
+   commands of the H6001 are not documented in these projects and were derived
+   from the author's own HCI capture.
+   Thanks to the maintainers of these projects.
+   The code was written with the assistance of an AI model (Claude, Anthropic)
+   and tested by the author on the hardware described above.
+
+ LICENSE
+   PolyForm Noncommercial License 1.0.0
+   https://polyformproject.org/licenses/noncommercial/1.0.0/
+   Required Notice: Copyright 2026 Sebastian-Faeh (https://github.com/Sebastian-Faeh)
+   Use, copying and modification are permitted for noncommercial purposes
+   only. Anyone who receives a copy must also receive these licence terms or
+   the URL above. Commercial use requires separate permission from the
+   copyright holder. The full licence text is in the file LICENSE of the
+   repository. The software is provided "as is", without warranty of any
+   kind.
+
+ CHANGELOG
+   1.0  single timer slot with read-back check, auto-connect with fallback,
+        browser check, colour sliders, compact layout, English interface.
+==============================================================================
+*/
+
+// ==PURE-START==
+const SERVICE_UUID = '00010203-0405-0607-0809-0a0b0c0d1910';
+const CHAR_WRITE   = '00010203-0405-0607-0809-0a0b0c0d2b11';
+const CHAR_NOTIFY  = '00010203-0405-0607-0809-0a0b0c0d2b10';
+const TIMER_SLOT   = 1;   // id 1 is accepted by the bulb; id 0 was discarded in tests
+
+function frame(bytes) {
+  const f = new Uint8Array(20);
+  bytes.slice(0, 19).forEach((b, i) => f[i] = b & 255);
+  let x = 0;
+  for (let i = 0; i < 19; i++) x ^= f[i];
+  f[19] = x;
+  return f;
+}
+function hex(u8) { return Array.from(u8, b => b.toString(16).padStart(2, '0')).join(' '); }
+function timeFrame(d) {
+  const off = -d.getTimezoneOffset();
+  const ep = Math.floor(d.getTime() / 1000);
+  const y = d.getFullYear();
+  return frame([0x33, 0x09, d.getHours(), d.getMinutes(), d.getSeconds(), d.getDay(),
+    1, Math.floor(Math.abs(off) / 60), Math.abs(off) % 60,
+    d.getDate(), d.getMonth() + 1, y & 255, y >> 8,
+    ep & 255, (ep >>> 8) & 255, (ep >>> 16) & 255, (ep >>> 24) & 255, 0, 0]);
+}
+function timerFrame(idx, sh, sm, eh, em, en) { return frame([0x33, 0x0a, idx, sh, sm, eh, em, en ? 1 : 0]); }
+function decodeTimer(v) {
+  const p = n => String(n).padStart(2, '0');
+  return { idx: v[2], sh: v[3], sm: v[4], eh: v[5], em: v[6], en: v[7] === 1,
+           text: p(v[3]) + ':' + p(v[4]) + ' to ' + p(v[5]) + ':' + p(v[6]) + (v[7] === 1 ? ', enabled' : ', off') };
+}
+function sameTimer(rec, sh, sm, eh, em, en) {
+  return !!rec && rec.sh === sh && rec.sm === sm && rec.eh === eh && rec.em === em && rec.en === !!en;
+}
+function hsvToRgb(h, s, v) {                       // h 0-360, s 0-100, v 0-100 -> [r,g,b] 0-255
+  s /= 100; v /= 100;
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r, g, b].map(t => Math.round((t + m) * 255));
+}
+// Browser check: returns 'none' (no Web Bluetooth), 'other' (Web Bluetooth but not Google Chrome), 'chrome'
+function browserKind(hasBluetooth, ua, brands) {
+  if (!hasBluetooth) return 'none';
+  const names = (brands || []).map(b => b.brand);
+  if (names.length) return names.includes('Google Chrome') ? 'chrome' : 'other';
+  return /Chrome\//.test(ua) && !/(Edg|OPR|SamsungBrowser|Brave)/.test(ua) ? 'chrome' : 'other';
+}
+// ==PURE-END==
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const p2 = n => String(n).padStart(2, '0');
+const logLines = [];
+function log(m) {
+  logLines.push(new Date().toLocaleTimeString() + ' ' + m);
+  while (logLines.length > 300) logLines.shift();
+  $('log').value = logLines.join('\n');
+  $('log').scrollTop = 1e9;
+}
+const store = {
+  get(k) { try { return localStorage.getItem('h6001.' + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem('h6001.' + k, v); } catch (e) { /* ignore */ }
+  }
+};
+
+let device = null, wch = null, nch = null, busy = false, searching = false, knownDev = null;
+let recs = {};
+let chain = Promise.resolve();
+
+function send(bytes, quiet) {
+  chain = chain.then(async () => {
+    if (!wch) return;
+    const f = (bytes instanceof Uint8Array) ? bytes : frame(bytes);
+    if (!quiet) log('TX ' + hex(f));
+    try {
+      if (wch.writeValueWithoutResponse) await wch.writeValueWithoutResponse(f); else await wch.writeValue(f);
+    } catch (e) { log('Write error: ' + e.message); }
+  });
+}
+
+function setStatus(t) { $('status').textContent = t; }
+function showStored() {
+  const parts = [0, 1].map(i => 'slot ' + i + ': ' + (recs[i] ? recs[i].text : '?'));
+  $('stored').textContent = 'Stored in the bulb - ' + parts.join(' | ');
+}
+function loadSlotIntoInputs() {
+  const r = recs[TIMER_SLOT];
+  if (!r) return;
+  $('tstart').value = p2(r.sh) + ':' + p2(r.sm);
+  $('tend').value = p2(r.eh) + ':' + p2(r.em);
+  $('tactive').checked = r.en;
+}
+function onNotify(ev) {
+  const v = new Uint8Array(ev.target.value.buffer);
+  if (v[0] === 0xaa && v[1] === 0x01) return;
+  log('RX ' + hex(v));
+  if (v[0] === 0xaa && v[1] === 0x0a && v[2] <= 1) { recs[v[2]] = decodeTimer(v); showStored(); }
+  if (v[0] === 0xaa && v[1] === 0x05 && v[2] === 4 && v[3] <= 1) $('scene').value = String(v[3]);
+}
+
+async function readSlots() {
+  recs = {};
+  send([0xaa, 0x0a, 0x00]); await sleep(300);
+  send([0xaa, 0x0a, 0x01]); await sleep(600);
+}
+
+function setResult(text, cls) {
+  const r = $('result');
+  r.hidden = !text; r.textContent = text || ''; r.className = cls || '';
+}
+
+async function saveTimer() {
+  if (busy) return;
+  const [sh, sm] = $('tstart').value.split(':').map(Number);
+  const [eh, em] = $('tend').value.split(':').map(Number);
+  const en = $('tactive').checked;
+  const sc = Number($('scene').value);
+  if ([sh, sm, eh, em].some(Number.isNaN)) { setResult('Start or end time is missing.', 'bad'); return; }
+  if (sh === eh && sm === em) { setResult('Start and end must not be equal.', 'bad'); return; }
+  busy = true; $('save').disabled = true; setResult('Saving ...');
+  try {
+    send(timeFrame(new Date())); await sleep(1000);
+    send(timerFrame(TIMER_SLOT, sh, sm, eh, em, en)); await sleep(1200);
+    send([0x33, 0x05, 0x04, sc]); await sleep(1500);
+    await readSlots();
+    if (sameTimer(recs[TIMER_SLOT], sh, sm, eh, em, en)) {
+      setResult('Saved and read back: ' + recs[TIMER_SLOT].text + '. Scene: ' + (sc === 0 ? 'sunrise' : 'sunset') + '.', 'ok');
+    } else {
+      setResult('The bulb did NOT accept the timer. Read back: ' + (recs[TIMER_SLOT] ? recs[TIMER_SLOT].text : 'nothing') + '. Please save again; if it fails again, send the log (under "Device and log").', 'bad');
+    }
+  } finally { busy = false; $('save').disabled = !wch; }
+}
+
+function setUi(c) {
+  ['tstart', 'tend', 'scene', 'tactive', 'save', 'readback', 'on', 'off', 'bright', 'hue', 'sat'].forEach(id => $(id).disabled = !c);
+  $('connect').textContent = c ? 'Disconnect' : 'Connect';
+  $('connect').classList.toggle('neutral', c);
+  $('search').disabled = c;
+  if (!c) setStatus(device ? 'Disconnected from ' + (device.name || '?') + '.' : 'Not connected.');
+}
+
+async function bind() {
+  setStatus('Connecting to ' + (device.name || device.id) + ' ...');
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(SERVICE_UUID);
+  wch = await svc.getCharacteristic(CHAR_WRITE);
+  nch = await svc.getCharacteristic(CHAR_NOTIFY);
+  nch.addEventListener('characteristicvaluechanged', onNotify);
+  await nch.startNotifications();
+  setUi(true);
+  $('devname').textContent = device.name || '-';
+  $('devid').textContent = device.id || '-';
+  store.set('devid', device.id || ''); store.set('devname', device.name || '');
+  const now = new Date();
+  send(timeFrame(now));
+  setStatus('Connected to ' + (device.name || '?') + '. Bulb clock set to ' + now.toLocaleTimeString() + '.');
+  log('Connected, notifications active, clock set.');
+  await sleep(800);
+  await readSlots();
+  loadSlotIntoInputs();
+  send([0xaa, 0x05, 0x01]);
+}
+
+function attach(dev) {
+  if (device === dev) return;
+  device = dev;
+  dev.addEventListener('gattserverdisconnected', () => {
+    log('Disconnected.'); wch = nch = null; setUi(false);
+  });
+}
+
+async function doSearch() {
+  if (searching || wch) return;
+  searching = true;
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE_UUID] });
+    attach(dev); knownDev = dev;
+    await bind();
+  } catch (e) {
+    log('Search/connection: ' + e.name + ': ' + e.message);
+    setStatus(e.name === 'NotFoundError' ? 'Search cancelled.' : 'Error: ' + e.message);
+  } finally { searching = false; }
+}
+async function connectKnown() {
+  if (!knownDev) return doSearch();
+  try { attach(knownDev); await bind(); }
+  catch (e) { log('Connection failed: ' + e.message); setStatus('Bulb not reachable (' + e.message + '). Switched on and in range?'); }
+}
+function armSearch(msg) {
+  setStatus(msg + ' The next tap opens the search.');
+  $('search').classList.add('pulse');
+  document.addEventListener('click', function once(ev) {
+    $('search').classList.remove('pulse');
+    if (ev.target && ev.target.closest && ev.target.closest('#connect, #search')) return;   // these buttons have their own handlers
+    doSearch();
+  }, { once: true });
+}
+
+$('connect').onclick = () => {
+  if (wch) { device.gatt.disconnect(); return; }
+  $('search').classList.remove('pulse');
+  connectKnown();
+};
+$('search').onclick = () => { $('search').classList.remove('pulse'); doSearch(); };
+
+function browserWarning() {
+  const kind = browserKind(!!navigator.bluetooth, navigator.userAgent || '', navigator.userAgentData && navigator.userAgentData.brands);
+  const w = $('warn');
+  if (kind === 'none') {
+    w.hidden = false; w.className = 'err';
+    w.textContent = 'This browser does not support Web Bluetooth. The page only works in Google Chrome (Android or desktop), not in Firefox, Safari or Chrome on iOS.';
+  } else if (kind === 'other') {
+    w.hidden = false; w.className = 'soft';
+    w.textContent = 'Warning: this page has only been tested in Google Chrome. In this browser it may work only partly or not at all.';
+  }
+  return kind;
+}
+
+async function startup() {
+  const kind = browserWarning();
+  if (kind === 'none') { setStatus('Not connected.'); $('connect').disabled = true; $('search').disabled = true; return; }
+  if (typeof navigator.bluetooth.getDevices !== 'function') {
+    log('getDevices() not available: automatic reconnection is not possible.');
+    armSearch('Automatic reconnection is not available in this Chrome.');
+    return;
+  }
+  log('getDevices() available.');
+  let devs = [];
+  try { devs = await navigator.bluetooth.getDevices(); }
+  catch (e) { log('getDevices() error: ' + e.message); }
+  if (!devs.length) { armSearch('No known device found.'); return; }
+  const savedId = store.get('devid');
+  const dev = devs.find(d => d.id === savedId) || devs[0];
+  knownDev = dev;
+  log('Auto-connecting to ' + (dev.name || dev.id) + ' ...');
+  try { attach(dev); await bind(); }
+  catch (e) {
+    log('Auto-connection failed: ' + e.message);
+    setStatus('Bulb not reachable (' + e.message + '). "Connect" tries again, "Search" selects another device.');
+  }
+}
+window.addEventListener('load', startup);
+
+setInterval(() => { if (wch && !busy) send([0xaa, 0x01], true); }, 2000);    // keep-alive like the official app
+
+$('save').onclick = saveTimer;
+$('readback').onclick = async () => { await readSlots(); loadSlotIntoInputs(); };
+$('on').onclick  = () => send([0x33, 0x01, 0x01]);
+$('off').onclick = () => send([0x33, 0x01, 0x00]);
+
+let lastSlider = 0;
+function throttled(fn) { return e => { const n = Date.now(); if (n - lastSlider < 80) return; lastSlider = n; fn(e); }; }
+const sendBright = e => send([0x33, 0x04, Number(e.target.value)]);
+$('bright').oninput = throttled(sendBright);
+$('bright').onchange = sendBright;
+function updateSatBg() { $('sat').style.background = 'linear-gradient(to right,#fff,' + 'hsl(' + $('hue').value + ',100%,50%))'; }
+function sendColor() { send([0x33, 0x05, 0x02, ...hsvToRgb(Number($('hue').value), Number($('sat').value), 100)]); }
+$('hue').oninput = throttled(() => { updateSatBg(); if (Number($('sat').value) === 0) $('sat').value = 100; sendColor(); });
+$('hue').onchange = () => { updateSatBg(); sendColor(); };
+$('sat').oninput = throttled(sendColor);
+$('sat').onchange = sendColor;
+updateSatBg();
+
+async function copyText(text, node, okMsg) {
+  try { await navigator.clipboard.writeText(text); log(okMsg); return; } catch (e) { /* fallback below */ }
+  try {
+    if (node.select) { node.value = text; node.focus(); node.select(); node.setSelectionRange(0, text.length); }
+    else { const r = document.createRange(); r.selectNodeContents(node); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    const ok = document.execCommand('copy');
+    log(ok ? okMsg + ' (fallback).' : 'Copying is blocked. The text is selected: long-press and choose "Copy".');
+  } catch (e) { log('Copying not possible: ' + e.message); }
+}
+$('copyid').onclick = () => copyText($('devid').textContent, $('devid'), 'ID copied.');
+$('copylog').onclick = () => copyText(logLines.join('\n'), $('log'), 'Log copied.');
+$('clearlog').onclick = () => { logLines.length = 0; $('log').value = ''; };
+setUi(false);
+</script>
+</body>
+</html>
