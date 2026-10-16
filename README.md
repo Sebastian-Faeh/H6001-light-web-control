@@ -13,9 +13,32 @@ source code and does not run it.
 Android. Only Google Chrome (Android or desktop) supports Web Bluetooth.
 
 **Use:** open the page in Chrome, connect to the bulb (close the Govee app
-first), set start, end and scene, press Save. The page reads the timer back
+first), set start, duration and scene, press Save. The page reads the timer back
 and reports whether the bulb accepted it. After saving, the bulb runs the
 timer on its own and the page does not need to stay connected.
+
+## Features
+
+- **Light:** on/off, brightness, hue and saturation. After "On" the sliders are
+  set from the state the bulb reports (in a scene only the brightness follows).
+- **Timer:** one daily window: start, duration (15 minutes to 3 h in 15 minute
+  steps), enabled, scene *Sunrise*, *Sunset* or *On* (plain colour with the slider
+  values, assumed to work, see [PROTOCOL.md](PROTOCOL.md)). Read-back check after
+  saving.
+- **Sunset now:** selects the sunset scene and switches on; the page checks the
+  bulb's reply.
+- **Sunset from a link:** open the page with `?action=sunset`, for example
+  <https://sebastian-faeh.github.io/H6001-light-web-control/?action=sunset>; the
+  sunset starts as soon as the page is connected. In Chrome on Android, menu
+  (three dots), "Add to Home screen" turns it into a one-tap shortcut.
+- **Alarm:** wake time, duration, scene and weekdays. The bulb timer repeats
+  every day and has no weekday, so the page enables it for the next start if that
+  weekday is selected and disables it otherwise. It checks at every connection
+  and once a day after 02:00 while the page is open. Settings are stored in a
+  cookie (and, for local files, in localStorage). Details and limits are in the
+  comment block of [`index.html`](index.html).
+- **One active page:** a newly opened page of the site makes older ones let go of
+  the bulb (they disconnect and say so). A page cannot close another tab.
 
 ## What is in the repository
 
@@ -84,6 +107,11 @@ them.
 
 ## Known limits
 
+- The alarm works only while the page is open and the device is awake. Wake times
+  before 02:00 are not supported. Disabling the timer on unselected weekdays,
+  scene *On*, windows below 38 minutes and the length of the sunset scene are
+  untested on the bulb. A manual Save is overwritten by the alarm at the next
+  check while it is active.
 - Only one daily timer window is used (timer id 1). Writes to id 0 were
   silently discarded by the bulb in tests; the cause is unknown.
 - The scene (sunrise or sunset) applies to the bulb as a whole, not per timer.

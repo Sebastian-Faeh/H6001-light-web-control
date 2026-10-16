@@ -29,7 +29,12 @@
   #hue::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 28px; background:#fff; border: 2px solid #000; border-radius: 6px; }
   #sat { border-radius: 14px; -webkit-appearance: none; appearance: none; }
   #sat::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 28px; background:#fff; border: 2px solid #000; border-radius: 6px; }
-  #status, #stored, #result { padding: 5px 8px; background:#1b1b24; border-radius: 6px; font-size:.8rem; margin: 4px 0; }
+  .top { display: flex; gap: 8px; align-items: center; }
+  .top button { flex: none; }
+  .day { display: flex; align-items: center; gap: 3px; font-size: .85rem; }
+  .days { gap: 6px; }
+  #status, #stored, #result, #alstatus { padding: 5px 8px; background:#1b1b24; border-radius: 6px; font-size:.8rem; margin: 4px 0; }
+  #status { flex: 1; min-width: 0; margin: 0; padding: 0 8px; font-size: .72rem; line-height: 1.2; max-height: 2.4em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   #result.ok { background:#16341f; }
   #result.bad { background:#40201c; }
   #warn { padding: 6px 8px; border-radius: 6px; font-size: .82rem; margin: 4px 0; }
@@ -47,28 +52,11 @@
 <h1>H6001 Light Web Control <small style="font-weight:normal;color:#888;font-size:.7em">unofficial</small></h1>
 <div id="warn" hidden></div>
 
-<div class="row">
+<div class="top">
   <button id="connect">Connect</button>
   <button id="search" class="neutral">Search</button>
+  <div id="status" title="">Not connected.</div>
 </div>
-<div id="status">Not connected.</div>
-
-<h2>Timer</h2>
-<div class="row">
-  <label class="field">Start <input type="time" id="tstart" value="06:30" disabled></label>
-  <label class="field">End <input type="time" id="tend" value="07:30" disabled></label>
-  <label class="field chk"><input type="checkbox" id="tactive" checked disabled>enabled</label>
-</div>
-<div class="row">
-  <select id="scene" disabled>
-    <option value="0">Sunrise</option>
-    <option value="1">Sunset</option>
-  </select>
-  <button id="save" disabled>Save</button>
-  <button id="readback" class="neutral" disabled>Read</button>
-</div>
-<div id="stored">Stored in the bulb: not read yet.</div>
-<div id="result" hidden></div>
 
 <h2>Light</h2>
 <div class="row">
@@ -79,13 +67,83 @@
 <div class="line"><span>Hue</span><input type="range" id="hue" min="0" max="360" value="0" disabled></div>
 <div class="line"><span>Saturation</span><input type="range" id="sat" min="0" max="100" value="0" disabled></div>
 
+<h2>Timer</h2>
+<div class="row">
+  <label class="field">Start <input type="time" id="tstart" value="06:30" disabled></label>
+  <label class="field">Duration <select id="tdur" disabled>
+    <option value="15">15 min</option>
+    <option value="30">30 min</option>
+    <option value="45" selected>45 min</option>
+    <option value="60">1 h</option>
+    <option value="75">1 h 15 min</option>
+    <option value="90">1 h 30 min</option>
+    <option value="105">1 h 45 min</option>
+    <option value="120">2 h</option>
+    <option value="135">2 h 15 min</option>
+    <option value="150">2 h 30 min</option>
+    <option value="165">2 h 45 min</option>
+    <option value="180">3 h</option>
+    <option id="tdurcustom" value="" hidden></option>
+  </select></label>
+  <label class="field chk"><input type="checkbox" id="tactive" checked disabled>enabled</label>
+</div>
+<div class="row">
+  <select id="scene" disabled>
+    <option value="0">Sunrise</option>
+    <option value="1">Sunset</option>
+    <option value="2">On</option>
+  </select>
+  <button id="save" disabled>Save</button>
+  <button id="readback" class="neutral" disabled>Read</button>
+  <button id="sunsetnow" class="neutral" disabled>Sunset now</button>
+</div>
+<div id="stored">Stored in the bulb: not read yet.</div>
+<div id="result" hidden></div>
+
+<h2>Alarm</h2>
+<div class="row">
+  <label class="field chk"><input type="checkbox" id="alon">active</label>
+  <label class="field">Wake time <input type="time" id="altime" value="06:30"></label>
+  <label class="field">Duration <select id="aldur">
+    <option value="15">15 min</option>
+    <option value="30">30 min</option>
+    <option value="45" selected>45 min</option>
+    <option value="60">1 h</option>
+    <option value="75">1 h 15 min</option>
+    <option value="90">1 h 30 min</option>
+    <option value="105">1 h 45 min</option>
+    <option value="120">2 h</option>
+    <option value="135">2 h 15 min</option>
+    <option value="150">2 h 30 min</option>
+    <option value="165">2 h 45 min</option>
+    <option value="180">3 h</option>
+  </select></label>
+  <label class="field">Scene <select id="alscene">
+    <option value="0">Sunrise</option>
+    <option value="1">Sunset</option>
+    <option value="2">On</option>
+  </select></label>
+</div>
+<div class="row days">
+  <label class="day"><input type="checkbox" id="alday1">Mo</label>
+  <label class="day"><input type="checkbox" id="alday2">Tu</label>
+  <label class="day"><input type="checkbox" id="alday3">We</label>
+  <label class="day"><input type="checkbox" id="alday4">Th</label>
+  <label class="day"><input type="checkbox" id="alday5">Fr</label>
+  <label class="day"><input type="checkbox" id="alday6">Sa</label>
+  <label class="day"><input type="checkbox" id="alday0">Su</label>
+  <button id="alapply" class="neutral">Apply now</button>
+</div>
+<div id="alstatus">Alarm is off.</div>
+
 <details>
   <summary>Notes</summary>
   <p>Unofficial project, not affiliated with or supported by Govee. Govee is a trademark of its owner.</p>
-  <p>Close the Govee app first; the bulb accepts only one connection at a time.</p>
-  <p>After saving, the bulb runs the timer on its own. The page does not need to stay connected.</p>
-  <p>Saving first sets the bulb clock, then writes the timer to timer slot 1, selects the scene and reads the timer back as a check. The result is shown in the coloured box.</p>
-  <p>The scene applies to the bulb as a whole, not per timer. Switching on starts the selected scene. Choosing a colour ends the scene.</p>
+  <p>Close the Govee app first; the bulb accepts only one connection at a time. Only one page of this site holds the bulb: a newly opened page makes older ones disconnect.</p>
+  <p><b>Light:</b> after "On" the page reads brightness and colour from the bulb and moves the sliders. In a scene (sunrise or sunset) the bulb reports no colour, so only the brightness slider follows. Choosing a colour ends the scene.</p>
+  <p><b>Timer:</b> saving sets the bulb clock, writes the timer to timer slot 1 (start and duration), selects the scene and reads the timer back as a check. Scene "On" sets a plain colour with the slider values instead of an animation. After saving, the bulb runs the timer on its own; the page does not need to stay connected. The timer repeats every day and has no weekday field. Short durations (15 minutes) are untested.</p>
+  <p><b>Sunset now</b> selects the sunset scene and switches the bulb on. Link with the action preselected: add <code>?action=sunset</code> to the address (for example as a home-screen shortcut); the page then starts the sunset as soon as it is connected.</p>
+  <p><b>Alarm:</b> wake time, duration, scene and weekdays are stored in a cookie. The bulb cannot do weekdays, so the page enables the bulb timer for the next start if that weekday is selected and disables it otherwise. It checks at every connection and once a day after 02:00 while the page is open; it does not run when the page is closed or the browser is asleep. While a window is running nothing is changed. While the bulb is lit the scene is not changed. A manual Save is overwritten by the alarm at the next check while the alarm is active. Disabling the timer on unselected days is untested.</p>
   <p>The bulb receives the time at every connection. Its own clock cannot be read, so the page does not compare times but always sets it. After the daylight-saving change on 25 Oct 2026, open the page once and connect.</p>
   <p>On load the page connects to the last used device if Chrome allows it. Otherwise the first tap on the page starts the search (Chrome only allows the search after a touch).</p>
   <p>Behaviour at the end of the timer window (switch off or not) has not been observed. Protocol details are in the source code.</p>
@@ -130,14 +188,22 @@
    - Connect to the bulb; reconnect automatically to the last used device on
      page load (when the browser supports it), otherwise open the device search
      on the first tap.
-   - One daily timer window (start time, end time, enabled) written to timer
-     slot 1 of the bulb, with read-back verification after writing.
-   - Choice of the bulb scene (sunrise or sunset).
+   - One daily timer window (start time, duration in 15 minute steps up to
+     3 h, enabled) written to timer slot 1 of the bulb, with read-back
+     verification after writing.
+   - Choice of the scene: sunrise, sunset or "on" (plain colour).
    - Power on/off, brightness (1-255), colour (hue and saturation sliders).
+     After "On" the sliders are set from the state reported by the bulb.
+   - "Sunset now" button and the address option ?action=sunset.
+   - Weekday alarm: wake time, duration, scene and weekdays; the page keeps the
+     bulb timer in line with it (see ALARM).
+   - Only one page of this site holds the bulb at a time.
    - Sets the bulb clock on every connection.
    - Browser check with a warning outside Chrome.
    - Single HTML file, no external libraries, no network access, no data leaves
-     the device. Only the last device id and name are stored in localStorage.
+     the device. The last device id and name are stored in localStorage; the
+     alarm settings in a first-party cookie (and a copy in localStorage,
+     because Chrome keeps no cookies for file:// pages).
 
  REQUIREMENTS
    - Google Chrome (Android or desktop) with Web Bluetooth. Other browsers:
@@ -154,12 +220,49 @@
    1. Open the page in Chrome. If a known device is found it connects
       automatically; otherwise tap anywhere (or "Search") and pick the bulb
       ("Minger_H6001_xxxx") in the Chrome dialog.
-   2. Set start, end, "enabled" and the scene, then press "Save". The result
-      box confirms (green) or reports (red) whether the bulb accepted the timer.
+   2. Set start, duration, "enabled" and the scene, then press "Save". The
+      result box confirms (green) or reports (red) whether the bulb accepted
+      the timer.
    3. "Read" reloads the stored timer from the bulb into the fields.
-   4. After the daylight-saving change open the page once so that the bulb
+   4. "Sunset now" starts the sunset scene immediately.
+   5. After the daylight-saving change open the page once so that the bulb
       clock is set again.
 
+ SINGLE INSTANCE
+   Pages of the same site (same address) talk through a BroadcastChannel. A page
+   that starts, or on which Connect or Search is pressed, tells the others to let
+   go of the bulb. They disconnect, show a message and do not reconnect or run
+   the alarm until Connect is pressed there. A page cannot close another tab
+   (browsers forbid that). Pages from a different address (for example a local
+   file and the GitHub Pages address) do not see each other; the bulb then
+   accepts only one connection anyway.
+
+ URL OPTION
+   index.html?action=sunset   starts "Sunset now" as soon as the bulb is
+   connected (once per page load). With Chrome "Add to Home screen" on an https
+   address this gives a one-tap shortcut, for example
+   https://sebastian-faeh.github.io/H6001-light-web-control/?action=sunset
+   The bulb must be reachable, see AUTOMATIC RECONNECTION.
+
+ ALARM
+   Settings: active, wake time, duration, scene, weekdays. They are stored in the
+   cookie "h6001.alarm" (one year, SameSite=Lax) and restored at the next visit.
+   The bulb timer repeats every day and has no weekday field. The page therefore
+   decides for the NEXT start of the window: enabled if its weekday is selected,
+   disabled otherwise. This is checked
+     - at every connection to the bulb,
+     - once a day, in the first check after 02:00, while the page is open
+       (the page checks every 30 s; at most one attempt per 5 minutes).
+   The check reads the timer from the bulb and writes only if it differs. It
+   never writes while a window is running (start until end plus 5 minutes).
+   The scene is set together with the timer; it is not changed while the bulb
+   is lit, because selecting a scene on a lit bulb may start it. A manual "Save"
+   is overwritten by the alarm at the next check while the alarm is active.
+   Limits: a web page runs only while it is open. If the tablet sleeps or Chrome
+   is closed at 02:00, the check happens at the next connection, so the timer of
+   the following start may then be wrong for one day. Wake times before 02:00
+   are not supported by the daily check. Disabling the timer on unselected days
+   (enabled byte 0) was not tested on the bulb.
  AUTOMATIC RECONNECTION
    On load the page calls navigator.bluetooth.getDevices() and connects to the
    device that was permitted earlier (the last used one is preferred). If
@@ -214,6 +317,7 @@
      33 04 vv                   brightness 0x00-0xFF                [verified]
                                 (0xFF is clearly brighter than 0x64)
      aa 04                      brightness query, reply aa 04 vv    [verified]
+                                (the page uses it to set the slider after "On")
      33 05 02 rr gg bb          static colour                       [verified]
                                 (ff ff ff gives white)
      33 05 04 00                scene "sunrise"                     [verified]
@@ -221,7 +325,11 @@
                                 and by the bulb behaviour)
      33 05 04 01                scene "sunset"                      [observed]
                                 (sent by the app after choosing sunset)
-     aa 05 01                   mode query, reply aa 05 04 ss       [observed]
+     aa 05 01                   mode query                          [observed]
+                                scene mode: reply aa 05 04 ss
+                                colour mode: reply aa 05 02 rr gg bb ...
+                                (rr gg bb as sent with 33 05 02; the bytes after
+                                them are unknown)
      33 09 ...                  set clock                           [verified]
         hh mm ss  weekday  01 tzH tzM  day month yearLo yearHi
         epoch (uint32 little endian, UTC)  00 00
@@ -253,7 +361,14 @@
    - Only one scene for all timers (the scene command is global).
    - Winter time and negative UTC offsets of the clock command untested.
    - Sunday encoding in the clock command untested.
-   - Sunset scene (01) not observed running on the bulb.
+   - Sunset scene (01) not observed running on the bulb. "Sunset now" sends
+     33 05 04 01 and then 33 01 01; the page checks the mode reply afterwards.
+     How long the sunset runs is unknown.
+   - Scene "On" is [assumed]: the page sends 33 05 02 rr gg bb and 33 04 vv, so
+     that the stored mode is a plain colour when the timer switches on. Not
+     tested whether the timer then lights the bulb in that colour.
+   - Windows shorter than 38 minutes were not tested in timer slot 1.
+   - A disabled timer (enabled byte 0) not tested for staying silent.
    - Web Bluetooth availability varies by browser and version.
 
  ACKNOWLEDGEMENTS
@@ -289,6 +404,11 @@
  CHANGELOG
    1.0  single timer slot with read-back check, auto-connect with fallback,
         browser check, colour sliders, compact layout, English interface.
+   1.1  waits for an advertisement before connecting to a stored device;
+        one active page; two-line status next to the buttons; Light section
+        first, sliders follow the bulb state after "On"; duration instead of
+        end time; scene "On"; "Sunset now" and ?action=sunset; weekday alarm
+        stored in a cookie.
 ==============================================================================
 */
 
@@ -338,6 +458,49 @@ function browserKind(hasBluetooth, ua, brands) {
   if (names.length) return names.includes('Google Chrome') ? 'chrome' : 'other';
   return /Chrome\//.test(ua) && !/(Edg|OPR|SamsungBrowser|Brave)/.test(ua) ? 'chrome' : 'other';
 }
+function endFromDuration(sh, sm, dur) {              // end time of a window of dur minutes
+  const t = (sh * 60 + sm + dur) % 1440;
+  return [Math.floor(t / 60), t % 60];
+}
+function durationOf(sh, sm, eh, em) { return ((eh * 60 + em) - (sh * 60 + sm) + 1440) % 1440; }
+function rgbToHsv(r, g, b) {                       // 0-255 -> [h 0-360, s 0-100, v 0-100]
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d > 0) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, mx === 0 ? 0 : d / mx * 100, mx * 100];
+}
+// Alarm: al = { time: 'HH:MM', dur: minutes, days: [7 booleans, index = Date.getDay(), 0 = Sunday] }.
+// The bulb timer repeats every day and has no weekday field, so the page decides
+// for the NEXT start of the window whether the timer is enabled. While a window is
+// running (plus 5 minutes) the timer must not be touched: { skip: true }.
+function alarmPlan(now, al) {
+  const [h, m] = al.time.split(':').map(Number);
+  const at = (addDays) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + addDays, h, m, 0, 0);
+  for (const addDays of [-1, 0]) {                 // a window that began yesterday may run past midnight
+    const s = at(addDays), e = new Date(s.getTime() + (al.dur + 5) * 60000);
+    if (now >= s && now < e) return { skip: true, start: s };
+  }
+  const next = at(now < at(0) ? 0 : 1);
+  const [eh, em] = endFromDuration(h, m, al.dur);
+  return { skip: false, sh: h, sm: m, eh, em, en: !!al.days[next.getDay()], next };
+}
+function nextAlarm(now, al) {                      // next start on a selected weekday, or null
+  const [h, m] = al.time.split(':').map(Number);
+  for (let i = 0; i <= 7; i++) {
+    const c = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, h, m, 0, 0);
+    if (c > now && al.days[c.getDay()]) return c;
+  }
+  return null;
+}
+function dayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function cookieValue(all, name) {                  // value of one cookie from a document.cookie string
+  for (const part of String(all || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch (e) { return null; } }
+  }
+  return null;
+}
 // ==PURE-END==
 
 const $ = id => document.getElementById(id);
@@ -355,8 +518,32 @@ const store = {
   set(k, v) { try { localStorage.setItem('h6001.' + k, v); } catch (e) { /* ignore */ }
   }
 };
+// The alarm settings live in a first-party cookie (one year). Chrome does not keep
+// cookies for file:// pages, so a copy is also kept in localStorage.
+const ALARM_COOKIE = 'h6001.alarm';
+const jar = {
+  get() {
+    try { const v = cookieValue(document.cookie, ALARM_COOKIE); if (v !== null) return v; } catch (e) { /* ignore */ }
+    return store.get('alarm');
+  },
+  set(v) {
+    try {
+      const secure = (typeof location !== 'undefined' && location.protocol === 'https:') ? '; Secure' : '';
+      document.cookie = ALARM_COOKIE + '=' + encodeURIComponent(v) + '; max-age=31536000; path=/; SameSite=Lax' + secure;
+    } catch (e) { /* ignore */ }
+    store.set('alarm', v);
+  }
+};
 
 let device = null, wch = null, nch = null, busy = false, searching = false, knownDev = null;
+let lastMode = null;     // last reply to "aa 05 01": { mode, scene }
+let lastPower = null;    // last reply to the keep-alive "aa 01": true = on
+let yielded = false;     // another page of this site took over the bulb
+let alarmRunning = false, lastAlarmTry = 0;
+const YIELD_MSG = 'Another page took over the bulb. Press Connect to use the bulb here again.';
+const CHECK_HOUR = 2;    // the alarm is checked once a day after 02:00 (and at every connection)
+let pendingAction = null;
+try { pendingAction = new URLSearchParams(location.search).get('action'); } catch (e) { /* no URL */ }
 let recs = {};
 let chain = Promise.resolve();
 
@@ -371,24 +558,42 @@ function send(bytes, quiet) {
   });
 }
 
-function setStatus(t) { $('status').textContent = t; }
+function setStatus(t) { $('status').textContent = t; $('status').title = t; }
 function showStored() {
   const parts = [0, 1].map(i => 'slot ' + i + ': ' + (recs[i] ? recs[i].text : '?'));
   $('stored').textContent = 'Stored in the bulb - ' + parts.join(' | ');
+}
+function setDuration(min) {                         // a duration that is not in the list gets a temporary entry
+  const sel = $('tdur'), c = $('tdurcustom');
+  sel.value = String(min);
+  if (sel.value !== String(min)) {
+    c.value = String(min); c.textContent = min + ' min (stored)'; c.hidden = false;
+    sel.value = String(min);
+  }
 }
 function loadSlotIntoInputs() {
   const r = recs[TIMER_SLOT];
   if (!r) return;
   $('tstart').value = p2(r.sh) + ':' + p2(r.sm);
-  $('tend').value = p2(r.eh) + ':' + p2(r.em);
+  setDuration(durationOf(r.sh, r.sm, r.eh, r.em));
   $('tactive').checked = r.en;
 }
 function onNotify(ev) {
   const v = new Uint8Array(ev.target.value.buffer);
-  if (v[0] === 0xaa && v[1] === 0x01) return;
+  if (v[0] === 0xaa && v[1] === 0x01) { lastPower = v[2] === 1; return; }
   log('RX ' + hex(v));
   if (v[0] === 0xaa && v[1] === 0x0a && v[2] <= 1) { recs[v[2]] = decodeTimer(v); showStored(); }
-  if (v[0] === 0xaa && v[1] === 0x05 && v[2] === 4 && v[3] <= 1) $('scene').value = String(v[3]);
+  if (v[0] === 0xaa && v[1] === 0x04) $('bright').value = String(Math.max(1, v[2]));
+  if (v[0] === 0xaa && v[1] === 0x05) {
+    lastMode = { mode: v[2], scene: v[3] };
+    if (v[2] === 4 && v[3] <= 1) $('scene').value = String(v[3]);
+    if (v[2] === 2) {                               // static colour: reply carries r g b
+      const [h, sat] = rgbToHsv(v[3], v[4], v[5]);
+      if (sat > 0) $('hue').value = String(Math.round(h));
+      $('sat').value = String(Math.round(sat));
+      updateSatBg();
+    }
+  }
 }
 
 async function readSlots() {
@@ -402,30 +607,62 @@ function setResult(text, cls) {
   r.hidden = !text; r.textContent = text || ''; r.className = cls || '';
 }
 
+const SCENE_NAMES = ['sunrise', 'sunset', 'on (colour and brightness from the sliders)'];
+function sendScene(sc) {
+  if (sc === 2) {                                   // "On": plain light, colour mode with the slider values
+    send([0x33, 0x05, 0x02, ...hsvToRgb(Number($('hue').value), Number($('sat').value), 100)]);
+    send([0x33, 0x04, Number($('bright').value)]);
+  } else if (sc === 0 || sc === 1) send([0x33, 0x05, 0x04, sc]);
+}
+// Core of saving: clock, timer record (slot 1), scene (skipped when sc is null), read-back.
+async function writeTimer(sh, sm, eh, em, en, sc) {
+  send(timeFrame(new Date())); await sleep(1000);
+  send(timerFrame(TIMER_SLOT, sh, sm, eh, em, en)); await sleep(1200);
+  if (sc !== null) sendScene(sc);
+  await sleep(1500);
+  await readSlots();
+  return sameTimer(recs[TIMER_SLOT], sh, sm, eh, em, en);
+}
+
 async function saveTimer() {
   if (busy) return;
   const [sh, sm] = $('tstart').value.split(':').map(Number);
-  const [eh, em] = $('tend').value.split(':').map(Number);
+  const dur = Number($('tdur').value);
   const en = $('tactive').checked;
   const sc = Number($('scene').value);
-  if ([sh, sm, eh, em].some(Number.isNaN)) { setResult('Start or end time is missing.', 'bad'); return; }
-  if (sh === eh && sm === em) { setResult('Start and end must not be equal.', 'bad'); return; }
+  if ([sh, sm, dur].some(n => Number.isNaN(n)) || !(dur > 0)) { setResult('Start time or duration is missing.', 'bad'); return; }
+  const [eh, em] = endFromDuration(sh, sm, dur);
   busy = true; $('save').disabled = true; setResult('Saving ...');
   try {
-    send(timeFrame(new Date())); await sleep(1000);
-    send(timerFrame(TIMER_SLOT, sh, sm, eh, em, en)); await sleep(1200);
-    send([0x33, 0x05, 0x04, sc]); await sleep(1500);
-    await readSlots();
-    if (sameTimer(recs[TIMER_SLOT], sh, sm, eh, em, en)) {
-      setResult('Saved and read back: ' + recs[TIMER_SLOT].text + '. Scene: ' + (sc === 0 ? 'sunrise' : 'sunset') + '.', 'ok');
+    if (await writeTimer(sh, sm, eh, em, en, sc)) {
+      setResult('Saved and read back: ' + recs[TIMER_SLOT].text + '. Scene: ' + SCENE_NAMES[sc] + '.', 'ok');
     } else {
       setResult('The bulb did NOT accept the timer. Read back: ' + (recs[TIMER_SLOT] ? recs[TIMER_SLOT].text : 'nothing') + '. Please save again; if it fails again, send the log (under "Device and log").', 'bad');
     }
   } finally { busy = false; $('save').disabled = !wch; }
 }
 
+async function readLight() {                        // brightness, then mode (scene or colour): the replies set the sliders
+  send([0xaa, 0x04]); await sleep(300);
+  send([0xaa, 0x05, 0x01]); await sleep(300);
+}
+
+// Start the sunset scene now: select the scene, then switch on (the scene starts at power on).
+async function sunsetNow() {
+  if (!wch || busy) return;
+  busy = true; $('sunsetnow').disabled = true; setResult('Starting sunset ...');
+  try {
+    lastMode = null;
+    send([0x33, 0x05, 0x04, 0x01]); await sleep(400);
+    send([0x33, 0x01, 0x01]); await sleep(1200);
+    send([0xaa, 0x05, 0x01]); await sleep(700);
+    if (lastMode && lastMode.mode === 4 && lastMode.scene === 1) setResult('Sunset started: the bulb reports the sunset scene.', 'ok');
+    else setResult('Sunset command sent, but the bulb did not report the sunset scene (reported: ' + (lastMode ? 'mode ' + lastMode.mode + ', value ' + lastMode.scene : 'nothing') + ').', 'bad');
+  } finally { busy = false; $('sunsetnow').disabled = !wch; }
+}
+
 function setUi(c) {
-  ['tstart', 'tend', 'scene', 'tactive', 'save', 'readback', 'on', 'off', 'bright', 'hue', 'sat'].forEach(id => $(id).disabled = !c);
+  ['tstart', 'tdur', 'scene', 'tactive', 'save', 'readback', 'sunsetnow', 'on', 'off', 'bright', 'hue', 'sat'].forEach(id => $(id).disabled = !c);
   $('connect').textContent = c ? 'Disconnect' : 'Connect';
   $('connect').classList.toggle('neutral', c);
   $('search').disabled = c;
@@ -451,7 +688,10 @@ async function bind() {
   await sleep(800);
   await readSlots();
   loadSlotIntoInputs();
-  send([0xaa, 0x05, 0x01]);
+  await readLight();
+  let acted = false;
+  if (pendingAction === 'sunset') { pendingAction = null; acted = true; log('URL action: sunset now'); await sunsetNow(); }
+  if (alarm.on && !acted) setTimeout(() => runAlarm('connect'), 300);
 }
 
 // A device returned by getDevices() is not connectable until Chrome has seen it
@@ -480,12 +720,14 @@ function attach(dev) {
   if (device === dev) return;
   device = dev;
   dev.addEventListener('gattserverdisconnected', () => {
-    log('Disconnected.'); wch = nch = null; setUi(false);
+    log('Disconnected.'); wch = nch = null; lastPower = null; setUi(false);
+    if (yielded) setStatus(YIELD_MSG);
   });
 }
 
 async function doSearch() {
   if (searching || wch) return;
+  claimBulb();
   searching = true;
   try {
     const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE_UUID] });
@@ -498,6 +740,7 @@ async function doSearch() {
 }
 async function connectKnown() {
   if (!knownDev) return doSearch();
+  claimBulb();
   try { setStatus('Looking for the bulb ...'); await waitForAdvert(knownDev, 10000); attach(knownDev); await bind(); }
   catch (e) { log('Connection failed: ' + e.message); setStatus('Bulb not reachable (' + e.message + '). Switched on, in range and not connected to another app? "Search" selects it again.'); }
 }
@@ -532,6 +775,7 @@ function browserWarning() {
 }
 
 async function startup() {
+  claimBulb();
   const kind = browserWarning();
   if (kind === 'none') { setStatus('Not connected.'); $('connect').disabled = true; $('search').disabled = true; return; }
   if (typeof navigator.bluetooth.getDevices !== 'function') {
@@ -560,7 +804,8 @@ setInterval(() => { if (wch && !busy) send([0xaa, 0x01], true); }, 2000);    // 
 
 $('save').onclick = saveTimer;
 $('readback').onclick = async () => { await readSlots(); loadSlotIntoInputs(); };
-$('on').onclick  = () => send([0x33, 0x01, 0x01]);
+$('sunsetnow').onclick = sunsetNow;
+$('on').onclick  = async () => { send([0x33, 0x01, 0x01]); await sleep(600); await readLight(); };   // then show the bulb's state in the sliders
 $('off').onclick = () => send([0x33, 0x01, 0x00]);
 
 let lastSlider = 0;
@@ -588,6 +833,115 @@ async function copyText(text, node, okMsg) {
 $('copyid').onclick = () => copyText($('devid').textContent, $('devid'), 'ID copied.');
 $('copylog').onclick = () => copyText(logLines.join('\n'), $('log'), 'Log copied.');
 $('clearlog').onclick = () => { logLines.length = 0; $('log').value = ''; };
+
+// ---------- one active page per browser ----------
+// A page that starts (or presses Connect/Search) tells all other pages of this site to
+// let go of the bulb; they disconnect and do not reconnect by themselves.
+const TAB_ID = Math.random().toString(36).slice(2);
+let tabChannel = null;
+try { if (typeof BroadcastChannel === 'function') tabChannel = new BroadcastChannel('h6001-light-web-control'); } catch (e) { /* none */ }
+function claimBulb() { yielded = false; if (tabChannel) tabChannel.postMessage({ type: 'claim', id: TAB_ID }); }
+if (tabChannel) tabChannel.onmessage = ev => {
+  const d = ev.data;
+  if (!d || d.type !== 'claim' || d.id === TAB_ID) return;
+  yielded = true;
+  log('Another page took over the bulb.');
+  if (wch && device) device.gatt.disconnect(); else setStatus(YIELD_MSG);
+};
+
+// ---------- alarm ----------
+const WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SCENE_SHORT = ['sunrise', 'sunset', 'on'];
+const alarm = { on: false, time: '06:30', dur: 45, scene: 0, days: [false, true, true, true, true, true, false], last: '' };
+let alarmNote = '';
+try {
+  const o = JSON.parse(jar.get() || 'null');
+  if (o && typeof o === 'object') {
+    if (typeof o.on === 'boolean') alarm.on = o.on;
+    if (/^\d\d:\d\d$/.test(o.time)) alarm.time = o.time;
+    if (Number.isInteger(o.dur) && o.dur >= 15 && o.dur <= 180) alarm.dur = o.dur;
+    if ([0, 1, 2].includes(o.scene)) alarm.scene = o.scene;
+    if (Array.isArray(o.days) && o.days.length === 7) alarm.days = o.days.map(Boolean);
+    if (typeof o.last === 'string') alarm.last = o.last;
+  }
+} catch (e) { /* ignore broken stored value */ }
+
+function alarmToUi() {
+  $('alon').checked = alarm.on; $('altime').value = alarm.time; $('aldur').value = String(alarm.dur); $('alscene').value = String(alarm.scene);
+  for (let d = 0; d < 7; d++) $('alday' + d).checked = alarm.days[d];
+}
+function alarmFromUi() {
+  alarm.on = $('alon').checked; alarm.time = $('altime').value || alarm.time;
+  alarm.dur = Number($('aldur').value) || alarm.dur; alarm.scene = Number($('alscene').value);
+  for (let d = 0; d < 7; d++) alarm.days[d] = $('alday' + d).checked;
+  jar.set(JSON.stringify(alarm));
+  showAlarm();
+}
+function showAlarm() {
+  if (!alarm.on) { $('alstatus').textContent = 'Alarm is off. The bulb timer is not managed by the alarm.'; return; }
+  const nx = nextAlarm(new Date(), alarm);
+  $('alstatus').textContent = (nx ? 'Next: ' + WEEK[nx.getDay()] + ' ' + dayKey(nx) + ' ' + alarm.time + ', ' + SCENE_SHORT[alarm.scene] + ', ' + alarm.dur + ' min.' : 'No weekday selected.') +
+    (alarm.last ? ' Last check: ' + alarm.last + '.' : '') + (alarmNote ? ' ' + alarmNote : '');
+}
+
+// Bring the bulb timer in line with the alarm: enabled if the next start falls on a selected
+// weekday, disabled otherwise. Runs at every connection and once a day after CHECK_HOUR while the
+// page is open. It never touches the timer while the window is running, and it does not change the
+// scene while the bulb is lit (setting a scene on a lit bulb may start it).
+async function runAlarm(reason) {
+  if (!alarm.on || alarmRunning || yielded || busy) return;
+  alarmRunning = true;
+  try {
+    const now = new Date();
+    const plan = alarmPlan(now, alarm);
+    if (plan.skip) { alarmNote = 'A window is running; nothing changed.'; return; }
+    const wasConnected = !!wch;
+    if (!wasConnected && !knownDev) { alarmNote = 'No known bulb yet: connect once with Search, then the alarm can reconnect by itself.'; return; }
+    if (!wasConnected) await connectKnown();
+    if (!wch) { alarmNote = 'Bulb not reachable (' + reason + '); will retry.'; return; }
+    if (wasConnected) { await readSlots(); await readLight(); }
+    if (lastPower === null) { send([0xaa, 0x01], true); await sleep(500); }   // is the bulb lit?
+    const needTimer = !sameTimer(recs[TIMER_SLOT], plan.sh, plan.sm, plan.eh, plan.em, plan.en);
+    const modeOk = !!lastMode && (alarm.scene === 2 ? lastMode.mode === 2 : lastMode.mode === 4 && lastMode.scene === alarm.scene);
+    const lit = lastPower === true;
+    let ok = true, note;
+    busy = true;
+    try {
+      if (needTimer) {
+        ok = await writeTimer(plan.sh, plan.sm, plan.eh, plan.em, plan.en, plan.en && !lit ? alarm.scene : null);
+        note = ok ? 'Timer written: ' + recs[TIMER_SLOT].text + '.' : 'The bulb did NOT accept the timer; will retry.';
+        if (ok) loadSlotIntoInputs();
+      } else if (plan.en && !modeOk && !lit) {
+        sendScene(alarm.scene); await sleep(800); note = 'Scene set.';
+      } else note = 'Timer already correct.';
+    } finally { busy = false; }
+    if (ok && plan.en && !modeOk && lit) note += ' The bulb is lit, scene not changed.';
+    alarmNote = note;
+    if (ok && now.getHours() >= CHECK_HOUR) { alarm.last = dayKey(now); jar.set(JSON.stringify(alarm)); }
+    log('Alarm (' + reason + '): ' + note);
+  } catch (e) {
+    alarmNote = 'Error: ' + e.message; log('Alarm error: ' + e.message);
+  } finally { alarmRunning = false; showAlarm(); }
+}
+async function alarmTick() {
+  if (!alarm.on || yielded || busy || alarmRunning) return;
+  const now = new Date();
+  if (now.getHours() < CHECK_HOUR || alarm.last === dayKey(now)) { showAlarm(); return; }
+  if (Date.now() - lastAlarmTry < 300000) return;   // at most one attempt per 5 minutes
+  lastAlarmTry = Date.now();
+  await runAlarm('daily check');
+}
+['alon', 'altime', 'aldur', 'alscene', 'alday0', 'alday1', 'alday2', 'alday3', 'alday4', 'alday5', 'alday6'].forEach(id => $(id).onchange = alarmFromUi);
+$('alapply').onclick = async () => {
+  alarmFromUi();
+  if (!alarm.on) return;
+  if (busy || alarmRunning) { alarmNote = 'Busy, try again in a moment.'; showAlarm(); return; }
+  claimBulb(); lastAlarmTry = Date.now();
+  await runAlarm('manual');
+};
+setInterval(alarmTick, 30000);
+alarmToUi();
+showAlarm();
 setUi(false);
 </script>
 </body>

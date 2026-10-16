@@ -59,7 +59,7 @@ The official app sends the query `aa 01` every 2 seconds as a keep-alive
 | `33 05 02 rr gg bb` | static colour (`ff ff ff` gives white) | verified |
 | `33 05 04 00` | scene "sunrise"; it starts when the bulb is switched on | verified |
 | `33 05 04 01` | scene "sunset" | observed (sent by the app after choosing sunset; not seen running) |
-| `aa 05 01` | mode query, reply `aa 05 04 ss` with the scene number | observed |
+| `aa 05 01` | mode query. Scene mode: reply `aa 05 04 ss` with the scene number. Static colour: reply `aa 05 02 rr gg bb ...`, the colour as sent with `33 05 02`; the bytes after it are unknown | observed (colour reply seen in a log from the page, e.g. `aa 05 02 bf ff ff 00 ff d5 a1`; the page uses it to set the sliders) |
 | `33 09 ...` | set the bulb clock (layout below) | verified |
 | `33 0a id sh sm eh em en` | write a timer record | verified |
 | `aa 0a n` | read timer record `n` (0 or 1) | verified |
@@ -132,6 +132,14 @@ id 0 itself, windows of 35 minutes or less (the only windows tried on id 0 were
 - Meaning of `aa 0b` and of the second service `...1912`.
 - Weekday encoding of Sunday, and the clock packet's time zone bytes for winter
   time and negative offsets.
-- Whether the sunset scene `33 05 04 01` runs as expected.
+- Whether the sunset scene `33 05 04 01` runs as expected, and for how long. The
+  page's "Sunset now" sends `33 05 04 01`, then `33 01 01`, and checks `aa 05 01`.
+- Whether a timer with scene "On" lights the bulb in the stored colour. The page
+  sends `33 05 02 rr gg bb` and `33 04 vv` so that the stored mode is a plain
+  colour (assumed).
+- Whether a timer record with the enabled byte `0` stays silent. The alarm relies
+  on it for unselected weekdays (assumed).
+- Whether windows shorter than 38 minutes work in timer id 1 (the page offers
+  15 minutes and up).
 - The lowest useful brightness value, and why the official app showed `0x64` (100)
   right after being used.
