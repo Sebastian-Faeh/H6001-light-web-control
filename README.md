@@ -37,10 +37,11 @@ timer on its own and the page does not need to stay connected.
   and once a day after 02:00 while the page is open. Settings are stored in a
   cookie (and, for local files, in localStorage). Details and limits are in the
   comment block of [`index.html`](index.html).
-- **Closing warning:** with the alarm active and 1 to 6 weekdays selected, the page
-  asks before it is closed, because the weekday selection only works while the
-  page runs. Chrome on Android may not show it when a tab is closed from the tab
-  switcher.
+- **Closing warning:** with the alarm active and 1 to 6 weekdays selected, the
+  heading "Alarm" shows "(you must leave this tab open)", because the weekday
+  selection only works while the page runs. The page also asks before it is
+  closed or left, but Chrome on Android shows no such question when a tab is
+  closed (tested), so only the note helps there.
 - **One active page:** a newly opened page of the site makes older ones let go of
   the bulb (they disconnect and say so). A page cannot close another tab.
 

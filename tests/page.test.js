@@ -12,7 +12,7 @@ const { scriptOf } = require('./helpers');
 const code = scriptOf('index.html');
 const DAYS = [0, 1, 2, 3, 4, 5, 6].map(d => 'alday' + d);
 const IDS = ['connect', 'search', 'tstart', 'tdur', 'tdurcustom', 'tactive', 'scene', 'save', 'readback', 'sunsetnow', 'on', 'off', 'bright', 'hue', 'sat',
-  'alon', 'altime', 'aldur', 'alscene', 'alapply', 'alstatus', ...DAYS,
+  'alon', 'alwarn', 'altime', 'aldur', 'alscene', 'alapply', 'alstatus', ...DAYS,
   'status', 'stored', 'result', 'warn', 'devname', 'devid', 'copyid', 'copylog', 'clearlog', 'log'];
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -30,7 +30,7 @@ function makePage(opt = {}) {
   let durVal = '45';                                    // a <select> keeps only values that exist as options
   Object.defineProperty(els.tdur, 'value', { get() { return durVal; }, set(v) { durVal = (okDur.has(String(v)) || String(v) === els.tdurcustom.value) ? String(v) : ''; } });
   els.aldur.value = '45'; els.altime.value = '06:30'; els.alscene.value = '0';
-  els.warn.hidden = true; els.result.hidden = true;     // both start hidden in index.html
+  els.warn.hidden = true; els.result.hidden = true; els.alwarn.hidden = true;     // both start hidden in index.html
 
   const timers = { 0: [9, 0x11, 8, 0x0f, 0], 1: opt.timer1 || [0x15, 0, 0x15, 0x26, 1] };
   const sent = []; let notify = null; let acceptTimerWrites = opt.rejectTimerWrites ? false : true;
@@ -388,4 +388,15 @@ test('the alarm check also runs when the page becomes visible again', async () =
   const p = makePage({ cookie: cookieOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
   await p.docEvents.visibilitychange();
   assert.match(p.els.alstatus.textContent, /No known bulb yet/);
+});
+
+test('"you must leave this tab open" shows next to Alarm only while the weekday selection needs the page', async () => {
+  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();
+  assert.equal(p.els.alwarn.hidden, false);
+  p.els.alon.checked = false; p.els.alon.onchange();
+  assert.equal(p.els.alwarn.hidden, true, 'alarm off');
+  p.els.alon.checked = true; for (let d = 0; d < 7; d++) p.els['alday' + d].checked = true; p.els.alon.onchange();
+  assert.equal(p.els.alwarn.hidden, true, 'all seven days');
+  p.els.alday0.checked = false; p.els.alon.onchange();
+  assert.equal(p.els.alwarn.hidden, false, 'six days');
 });
