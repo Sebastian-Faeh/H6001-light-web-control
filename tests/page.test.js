@@ -61,17 +61,17 @@ function makePage(opt = {}) {
   let requested = 0; const clicks = []; let onLoad = null;
   const bt = opt.noBluetooth ? undefined : { async requestDevice() { requested++; return dev; } };
   if (bt && !opt.noGetDevices) bt.getDevices = async () => (opt.devices === undefined ? [dev] : opt.devices);
-  let cookieJar = opt.cookie || ''; const intervals = [];
+  let cookieJar = opt.cookie || ''; const intervals = []; const docEvents = {}, winEvents = {};
   const channels = [];
   class FakeChannel { constructor(n) { this.name = n; this.posted = []; channels.push(this); } postMessage(m) { this.posted.push(m); } }
   const RealDate = Date;
   class FakeDate extends RealDate { constructor(...a) { if (a.length === 0 && opt.now) super(opt.now); else super(...a); } static now() { return opt.now || RealDate.now(); } }
   const ctx = {
-    document: { getElementById: mk, get cookie() { return cookieJar; }, set cookie(v) { cookieJar = v.split(';')[0]; }, addEventListener(t, f) { if (t === 'click') clicks.push(f); }, createRange() { return { selectNodeContents() {} }; }, execCommand() { return true; } },
+    document: { getElementById: mk, visibilityState: 'visible', get cookie() { return cookieJar; }, set cookie(v) { cookieJar = v.split(';')[0]; }, addEventListener(t, f) { if (t === 'click') clicks.push(f); else docEvents[t] = f; }, createRange() { return { selectNodeContents() {} }; }, execCommand() { return true; } },
     getSelection() { return { removeAllRanges() {}, addRange() {} }; },
     navigator: { bluetooth: bt, userAgent: opt.ua || 'Chrome/140', userAgentData: opt.brands ? { brands: opt.brands } : undefined, clipboard: { async writeText() {} } },
     localStorage: { getItem() { return null; }, setItem() {} },
-    addEventListener(t, f) { if (t === 'load') onLoad = f; },
+    addEventListener(t, f) { if (t === 'load') onLoad = f; else winEvents[t] = f; },
     URLSearchParams,
     location: opt.search !== undefined ? { search: opt.search, protocol: 'https:' } : undefined,
     BroadcastChannel: opt.noChannel ? undefined : FakeChannel,
@@ -79,7 +79,7 @@ function makePage(opt = {}) {
   };
   ctx.window = ctx;
   vm.createContext(ctx); vm.runInContext(code, ctx);
-  return { els, sent, clicks, timers, dev, channels, intervals, get cookie() { return cookieJar; }, get disconnects() { return disconnects; }, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
+  return { els, sent, clicks, timers, dev, channels, intervals, docEvents, winEvents, get cookie() { return cookieJar; }, get disconnects() { return disconnects; }, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
 }
 
 test('connects automatically to a known device, sets the clock and loads the stored timer', async () => {
@@ -348,7 +348,7 @@ test('alarm: nothing is written while the alarm is off', async () => {
 
 test('alarm without a known bulb does not try to open the chooser by itself', async () => {
   const p = makePage({ cookie: cookieOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
-  const tick = p.intervals.find(i => i[1] === 30000)[0];
+  const tick = p.intervals.find(i => i[1] === 3600000)[0];
   await tick();
   assert.match(p.els.alstatus.textContent, /No known bulb yet/);
   assert.equal(p.requested, 0);
@@ -358,4 +358,34 @@ test('daily check: runs once per day, not before 02:00', async () => {
   const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 1, 30) }); await p.start();
   await until(() => /Timer written/.test(p.els.alstatus.textContent));      // the connection check ran
   assert.doesNotMatch(p.els.alstatus.textContent, /Last check/, 'before 02:00 the day is not marked as checked');
+});
+
+test('closing warning: asked only while the weekday selection needs the page', async () => {
+  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();        // Mon-Fri selected, alarm active
+  const ev = { prevented: false, preventDefault() { this.prevented = true; }, returnValue: undefined };
+  p.winEvents.beforeunload(ev);
+  assert.equal(ev.prevented, true);
+  assert.equal(ev.returnValue, '');
+  const off = makePage({ cookie: cookieOf({ ...ALARM, on: false }) }); await off.start();
+  const e2 = { prevented: false, preventDefault() { this.prevented = true; } };
+  off.winEvents.beforeunload(e2);
+  assert.equal(e2.prevented, false, 'alarm off: no warning');
+  const all = makePage({ cookie: cookieOf({ ...ALARM, days: new Array(7).fill(true) }), now: at(21, 6, 40) }); await all.start();
+  const e3 = { prevented: false, preventDefault() { this.prevented = true; } };
+  all.winEvents.beforeunload(e3);
+  assert.equal(e3.prevented, false, 'all seven days: the page is not needed');
+});
+
+test('closing warning: not asked by a page that gave the bulb to another page', async () => {
+  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();
+  p.channels[0].onmessage({ data: { type: 'claim', id: 'someone-else' } });
+  const ev = { prevented: false, preventDefault() { this.prevented = true; } };
+  p.winEvents.beforeunload(ev);
+  assert.equal(ev.prevented, false);
+});
+
+test('the alarm check also runs when the page becomes visible again', async () => {
+  const p = makePage({ cookie: cookieOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
+  await p.docEvents.visibilitychange();
+  assert.match(p.els.alstatus.textContent, /No known bulb yet/);
 });

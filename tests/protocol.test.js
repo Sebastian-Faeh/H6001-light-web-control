@@ -158,3 +158,13 @@ test('dayKey and cookieValue', () => {
   assert.equal(P.cookieValue(undefined, 'x'), null);
   assert.equal(P.cookieValue('xh6001.alarm=1', 'h6001.alarm'), null);
 });
+
+test('alarmNeedsPage: only for 1 to 6 selected weekdays while the alarm is active', () => {
+  const days = n => Array.from({ length: 7 }, (_, i) => i < n);
+  assert.equal(P.alarmNeedsPage({ on: true, days: days(5) }), true);
+  assert.equal(P.alarmNeedsPage({ on: true, days: days(1) }), true);
+  assert.equal(P.alarmNeedsPage({ on: true, days: days(6) }), true);
+  assert.equal(P.alarmNeedsPage({ on: true, days: days(7) }), false);
+  assert.equal(P.alarmNeedsPage({ on: true, days: days(0) }), false);
+  assert.equal(P.alarmNeedsPage({ on: false, days: days(5) }), false);
+});
