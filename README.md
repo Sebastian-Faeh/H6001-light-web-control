@@ -37,6 +37,11 @@ timer on its own and the page does not need to stay connected.
   and once a day after 02:00 while the page is open. Settings are stored in a
   cookie (and, for local files, in localStorage). Details and limits are in the
   comment block of [`index.html`](index.html).
+- **Alarm from a routine:** the alarm check runs at every connection. A scheduled
+  routine on the device that opens the page at night (for example at 02:05) is
+  therefore enough, without keeping the page open all day. The alarm has to be
+  active, the bulb in range and not connected to another app. Whether Chrome runs
+  the page and Bluetooth with the screen off is untested.
 - **Closing warning:** with the alarm active and 1 to 6 weekdays selected, the
   heading "Alarm" shows "(you must leave this tab open)", because the weekday
   selection only works while the page runs. The page also asks before it is

@@ -150,7 +150,7 @@
   <p><b>Light:</b> after "On" the page reads brightness and colour from the bulb and moves the sliders. In a scene (sunrise or sunset) the bulb reports no colour, so only the brightness slider follows. Choosing a colour ends the scene.</p>
   <p><b>Timer:</b> saving sets the bulb clock, writes the timer to timer slot 1 (start and duration), selects the scene and reads the timer back as a check. Scene "On" sets a plain colour with the slider values instead of an animation. After saving, the bulb runs the timer on its own; the page does not need to stay connected. The timer repeats every day and has no weekday field. Short durations (15 minutes) are untested.</p>
   <p><b>Sunset now</b> selects the sunset scene and switches the bulb on. Link with the action preselected: add <code>?action=sunset</code> to the address (for example as a home-screen shortcut); the page then starts the sunset as soon as it is connected.</p>
-  <p><b>Alarm:</b> wake time, duration, scene and weekdays are stored in a cookie. The bulb cannot do weekdays, so the page enables the bulb timer for the next start if that weekday is selected and disables it otherwise. It checks at every connection, when the page becomes visible again and once a day after 02:00 (hourly timer) while the page is open; it does not run when the page is closed or the browser is asleep, and background timers may be delayed or stopped. With 1 to 6 weekdays selected the page must stay open (the heading shows a note); it asks before being closed, but Chrome on Android shows no question when a tab is closed. While a window is running nothing is changed. While the bulb is lit the scene is not changed. A manual Save is overwritten by the alarm at the next check while the alarm is active. Disabling the timer on unselected days is untested.</p>
+  <p><b>Alarm:</b> a scheduled routine that opens this page at night (for example at 02:05) also runs the check, because the check runs at every connection; whether it works with the screen off is untested. Wake time, duration, scene and weekdays are stored in a cookie. The bulb cannot do weekdays, so the page enables the bulb timer for the next start if that weekday is selected and disables it otherwise. It checks at every connection, when the page becomes visible again and once a day after 02:00 (hourly timer) while the page is open; it does not run when the page is closed or the browser is asleep, and background timers may be delayed or stopped. With 1 to 6 weekdays selected the page must stay open (the heading shows a note); it asks before being closed, but Chrome on Android shows no question when a tab is closed. While a window is running nothing is changed. While the bulb is lit the scene is not changed. A manual Save is overwritten by the alarm at the next check while the alarm is active. Disabling the timer on unselected days is untested.</p>
   <p>The bulb receives the time at every connection. Its own clock cannot be read, so the page does not compare times but always sets it. After the daylight-saving change on 25 Oct 2026, open the page once and connect.</p>
   <p>On load the page connects to the last used device if Chrome allows it. Otherwise the first tap on the page starts the search (Chrome only allows the search after a touch).</p>
   <p>Behaviour at the end of the timer window (switch off or not) has not been observed. Protocol details are in the source code.</p>
@@ -266,6 +266,14 @@
    The scene is set together with the timer; it is not changed while the bulb
    is lit, because selecting a scene on a lit bulb may start it. A manual "Save"
    is overwritten by the alarm at the next check while the alarm is active.
+   Timed start by a routine: the check also runs at every connection, so
+   something that opens the page at night does the job without the page staying
+   open all day, for example a scheduled routine on the device that opens
+   https://sebastian-faeh.github.io/H6001-light-web-control/ at 02:05. The
+   alarm must be active (it is stored in the cookie), the bulb in range and
+   not connected to another app. Whether Chrome runs the page and Bluetooth
+   while the screen is off is not known; try it. A page that stays open
+   afterwards keeps the bulb connected.
    Closing warning: while the alarm is active and 1 to 6 weekdays are selected,
    the page that holds the bulb asks for confirmation before it is closed or
    left (beforeunload). With 0 or 7 weekdays the page is not needed and does
