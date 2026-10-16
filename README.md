@@ -34,8 +34,8 @@ timer on its own and the page does not need to stay connected.
 - **Alarm:** wake time, duration, scene and weekdays. The bulb timer repeats
   every day and has no weekday, so the page enables it for the next start if that
   weekday is selected and disables it otherwise. It checks at every connection
-  and once a day after 02:00 while the page is open. Settings are stored in a
-  cookie (and, for local files, in localStorage). Details and limits are in the
+  and once a day after 02:00 while the page is open. Settings are stored in
+  this browser (localStorage). Details and limits are in the
   comment block of [`index.html`](index.html).
 - **Closing warning:** with the alarm active and 1 to 6 weekdays selected, the
   heading "Alarm" shows "(you must leave this tab open)", because the weekday
@@ -109,6 +109,18 @@ and the GitHub Pages address, with both flags from step 4 set to Enabled
 longer in range." Not recorded, and therefore unknown: the Chrome version, and
 whether each flag is needed on its own or whether Chrome Stable works without
 them.
+
+## Privacy
+
+The page has no server part, no analytics, no external requests and sets no
+cookies. It stores in the browser's `localStorage`: the name and ID of the bulb
+(for automatic reconnection) and the alarm settings (written only after the alarm
+controls are used). Nothing is sent anywhere by the page; clearing the site data
+in Chrome removes it. Hosting on GitHub Pages means GitHub processes the usual
+connection data (such as the IP address) when the page is loaded; see GitHub's
+privacy statement. An earlier version stored the alarm settings in a cookie; the
+page copies it to `localStorage` once and deletes the cookie. This is not legal
+advice.
 
 ## Tips
 

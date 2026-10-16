@@ -61,16 +61,17 @@ function makePage(opt = {}) {
   let requested = 0; const clicks = []; let onLoad = null;
   const bt = opt.noBluetooth ? undefined : { async requestDevice() { requested++; return dev; } };
   if (bt && !opt.noGetDevices) bt.getDevices = async () => (opt.devices === undefined ? [dev] : opt.devices);
+  const storage = { ...(opt.store || {}) };
   let cookieJar = opt.cookie || ''; const intervals = []; const docEvents = {}, winEvents = {};
   const channels = [];
   class FakeChannel { constructor(n) { this.name = n; this.posted = []; channels.push(this); } postMessage(m) { this.posted.push(m); } }
   const RealDate = Date;
   class FakeDate extends RealDate { constructor(...a) { if (a.length === 0 && opt.now) super(opt.now); else super(...a); } static now() { return opt.now || RealDate.now(); } }
   const ctx = {
-    document: { getElementById: mk, visibilityState: 'visible', get cookie() { return cookieJar; }, set cookie(v) { cookieJar = v.split(';')[0]; }, addEventListener(t, f) { if (t === 'click') clicks.push(f); else docEvents[t] = f; }, createRange() { return { selectNodeContents() {} }; }, execCommand() { return true; } },
+    document: { getElementById: mk, visibilityState: 'visible', get cookie() { return cookieJar; }, set cookie(v) { cookieJar = /max-age=0/.test(v) ? '' : v.split(';')[0]; }, addEventListener(t, f) { if (t === 'click') clicks.push(f); else docEvents[t] = f; }, createRange() { return { selectNodeContents() {} }; }, execCommand() { return true; } },
     getSelection() { return { removeAllRanges() {}, addRange() {} }; },
     navigator: { bluetooth: bt, userAgent: opt.ua || 'Chrome/140', userAgentData: opt.brands ? { brands: opt.brands } : undefined, clipboard: { async writeText() {} } },
-    localStorage: { getItem() { return null; }, setItem() {} },
+    localStorage: { getItem(k) { return k in storage ? storage[k] : null; }, setItem(k, v) { storage[k] = String(v); } },
     addEventListener(t, f) { if (t === 'load') onLoad = f; else winEvents[t] = f; },
     URLSearchParams,
     location: opt.search !== undefined ? { search: opt.search, protocol: 'https:' } : undefined,
@@ -79,7 +80,7 @@ function makePage(opt = {}) {
   };
   ctx.window = ctx;
   vm.createContext(ctx); vm.runInContext(code, ctx);
-  return { els, sent, clicks, timers, dev, channels, intervals, docEvents, winEvents, get cookie() { return cookieJar; }, get disconnects() { return disconnects; }, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
+  return { els, sent, clicks, timers, dev, channels, intervals, storage, docEvents, winEvents, get cookie() { return cookieJar; }, get disconnects() { return disconnects; }, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
 }
 
 test('connects automatically to a known device, sets the clock and loads the stored timer', async () => {
@@ -265,10 +266,11 @@ test('the page still works where BroadcastChannel does not exist', async () => {
 // ---------- alarm ----------
 const ALARM = { on: true, time: '06:30', dur: 45, scene: 0, days: [false, true, true, true, true, true, false], last: '' };
 const cookieOf = a => 'h6001.alarm=' + encodeURIComponent(JSON.stringify(a));
+const storeOf = a => ({ 'h6001.alarm': JSON.stringify(a) });
 const at = (d, h, m) => new Date(2026, 9, d, h, m, 0).getTime();     // October 2026: 20th is a Tuesday
 
-test('alarm settings are restored from the cookie', async () => {
-  const p = makePage({ cookie: cookieOf({ ...ALARM, time: '05:15', dur: 90, scene: 1 }), now: at(20, 20, 0) }); await p.start();
+test('alarm settings are restored from localStorage', async () => {
+  const p = makePage({ store: storeOf({ ...ALARM, time: '05:15', dur: 90, scene: 1 }), now: at(20, 20, 0) }); await p.start();
   assert.equal(p.els.alon.checked, true);
   assert.equal(p.els.altime.value, '05:15');
   assert.equal(p.els.aldur.value, '90');
@@ -278,17 +280,25 @@ test('alarm settings are restored from the cookie', async () => {
   assert.match(p.els.alstatus.textContent, /^Next: Wed 2026-10-21 05:15, sunset, 90 min\./);
 });
 
-test('changed alarm settings are written to the cookie', async () => {
+test('changed alarm settings are written to localStorage, not to a cookie', async () => {
   const p = makePage({ now: at(20, 20, 0) }); await p.start();
+  assert.equal(p.storage['h6001.alarm'], undefined, 'nothing is stored before the alarm controls are used');
   p.els.alon.checked = true; p.els.altime.value = '05:15'; p.els.alday0.checked = true; p.els.alday1.checked = false;
   p.els.alon.onchange();
-  assert.match(p.cookie, /^h6001\.alarm=/);
-  const o = JSON.parse(decodeURIComponent(p.cookie.split('=')[1]));
+  const o = JSON.parse(p.storage['h6001.alarm']);
   assert.equal(o.on, true); assert.equal(o.time, '05:15'); assert.equal(o.days[0], true); assert.equal(o.days[1], false);
+  assert.equal(p.cookie, '', 'no cookie is set');
+});
+
+test('an alarm cookie from the earlier version is moved to localStorage and deleted', async () => {
+  const p = makePage({ cookie: cookieOf({ ...ALARM, time: '05:15', on: false }), now: at(20, 20, 0) }); await p.start();
+  assert.equal(p.els.altime.value, '05:15');
+  assert.equal(JSON.parse(p.storage['h6001.alarm']).time, '05:15');
+  assert.equal(p.cookie, '');
 });
 
 test('alarm on connect: next start on a selected weekday enables the timer and sets the scene', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(20, 20, 0) }); await p.start();    // Tuesday evening, next start Wednesday
+  const p = makePage({ store: storeOf(ALARM), now: at(20, 20, 0) }); await p.start();    // Tuesday evening, next start Wednesday
   await until(() => /Timer written/.test(p.els.alstatus.textContent));
   const k = frames(p);
   assert.ok(k.includes('33 0a 01 06 1e 07 0f 01'), k.join('|'));
@@ -297,7 +307,7 @@ test('alarm on connect: next start on a selected weekday enables the timer and s
 });
 
 test('alarm on connect: next start on an unselected weekday disables the timer and leaves the scene alone', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(23, 20, 0) }); await p.start();    // Friday evening, next start Saturday
+  const p = makePage({ store: storeOf(ALARM), now: at(23, 20, 0) }); await p.start();    // Friday evening, next start Saturday
   await until(() => /Timer written/.test(p.els.alstatus.textContent));
   const k = frames(p);
   assert.ok(k.includes('33 0a 01 06 1e 07 0f 00'), k.join('|'));
@@ -306,27 +316,27 @@ test('alarm on connect: next start on an unselected weekday disables the timer a
 });
 
 test('alarm: after the last selected day the timer is disabled in the night (check after 02:00)', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(24, 2, 30) }); await p.start();    // Saturday 02:30
+  const p = makePage({ store: storeOf(ALARM), now: at(24, 2, 30) }); await p.start();    // Saturday 02:30
   await until(() => /Timer written/.test(p.els.alstatus.textContent));
   assert.deepEqual(p.timers[1], [6, 30, 7, 15, 0]);
   assert.match(p.els.alstatus.textContent, /Last check: 2026-10-24/);
 });
 
 test('alarm never touches the timer while its window is running', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(21, 6, 40) }); await p.start();
   await until(() => /window is running/.test(p.els.alstatus.textContent));
   assert.ok(!frames(p).some(f => f.startsWith('33 0a')));
 });
 
 test('alarm: a lit bulb gets the timer but not a scene change', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(20, 20, 0), lit: true }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(20, 20, 0), lit: true }); await p.start();
   await until(() => /Timer written/.test(p.els.alstatus.textContent));
   assert.ok(!frames(p).some(f => f.startsWith('33 05 04')));
   assert.match(p.els.alstatus.textContent, /lit, scene not changed/);
 });
 
 test('alarm: a correct timer is left alone, a wrong scene is corrected', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(20, 20, 0), timer1: [6, 30, 7, 15, 1] }); await p.start();   // bulb reports scene 1, alarm wants 0
+  const p = makePage({ store: storeOf(ALARM), now: at(20, 20, 0), timer1: [6, 30, 7, 15, 1] }); await p.start();   // bulb reports scene 1, alarm wants 0
   await until(() => /Scene set/.test(p.els.alstatus.textContent));
   const k = frames(p);
   assert.ok(!k.some(f => f.startsWith('33 0a')));
@@ -334,20 +344,20 @@ test('alarm: a correct timer is left alone, a wrong scene is corrected', async (
 });
 
 test('alarm: correct timer and scene means no write at all', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(20, 20, 0), timer1: [6, 30, 7, 15, 1], mode: [4, 0] }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(20, 20, 0), timer1: [6, 30, 7, 15, 1], mode: [4, 0] }); await p.start();
   await until(() => /already correct/.test(p.els.alstatus.textContent));
   assert.ok(!frames(p).some(f => f.startsWith('33 0a') || f.startsWith('33 05')));
 });
 
 test('alarm: nothing is written while the alarm is off', async () => {
-  const p = makePage({ cookie: cookieOf({ ...ALARM, on: false }), now: at(20, 20, 0) }); await p.start();
+  const p = makePage({ store: storeOf({ ...ALARM, on: false }), now: at(20, 20, 0) }); await p.start();
   await wait(1200);
   assert.ok(!frames(p).some(f => f.startsWith('33 0a')));
   assert.match(p.els.alstatus.textContent, /^Alarm is off/);
 });
 
 test('alarm without a known bulb does not try to open the chooser by itself', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
   const tick = p.intervals.find(i => i[1] === 3600000)[0];
   await tick();
   assert.match(p.els.alstatus.textContent, /No known bulb yet/);
@@ -355,29 +365,29 @@ test('alarm without a known bulb does not try to open the chooser by itself', as
 });
 
 test('daily check: runs once per day, not before 02:00', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 1, 30) }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(21, 1, 30) }); await p.start();
   await until(() => /Timer written/.test(p.els.alstatus.textContent));      // the connection check ran
   assert.doesNotMatch(p.els.alstatus.textContent, /Last check/, 'before 02:00 the day is not marked as checked');
 });
 
 test('closing warning: asked only while the weekday selection needs the page', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();        // Mon-Fri selected, alarm active
+  const p = makePage({ store: storeOf(ALARM), now: at(21, 6, 40) }); await p.start();        // Mon-Fri selected, alarm active
   const ev = { prevented: false, preventDefault() { this.prevented = true; }, returnValue: undefined };
   p.winEvents.beforeunload(ev);
   assert.equal(ev.prevented, true);
   assert.equal(ev.returnValue, '');
-  const off = makePage({ cookie: cookieOf({ ...ALARM, on: false }) }); await off.start();
+  const off = makePage({ store: storeOf({ ...ALARM, on: false }) }); await off.start();
   const e2 = { prevented: false, preventDefault() { this.prevented = true; } };
   off.winEvents.beforeunload(e2);
   assert.equal(e2.prevented, false, 'alarm off: no warning');
-  const all = makePage({ cookie: cookieOf({ ...ALARM, days: new Array(7).fill(true) }), now: at(21, 6, 40) }); await all.start();
+  const all = makePage({ store: storeOf({ ...ALARM, days: new Array(7).fill(true) }), now: at(21, 6, 40) }); await all.start();
   const e3 = { prevented: false, preventDefault() { this.prevented = true; } };
   all.winEvents.beforeunload(e3);
   assert.equal(e3.prevented, false, 'all seven days: the page is not needed');
 });
 
 test('closing warning: not asked by a page that gave the bulb to another page', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(21, 6, 40) }); await p.start();
   p.channels[0].onmessage({ data: { type: 'claim', id: 'someone-else' } });
   const ev = { prevented: false, preventDefault() { this.prevented = true; } };
   p.winEvents.beforeunload(ev);
@@ -385,13 +395,13 @@ test('closing warning: not asked by a page that gave the bulb to another page', 
 });
 
 test('the alarm check also runs when the page becomes visible again', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(25, 3, 0), noGetDevices: true }); await p.start();
   await p.docEvents.visibilitychange();
   assert.match(p.els.alstatus.textContent, /No known bulb yet/);
 });
 
 test('"you must leave this tab open" shows next to Alarm only while the weekday selection needs the page', async () => {
-  const p = makePage({ cookie: cookieOf(ALARM), now: at(21, 6, 40) }); await p.start();
+  const p = makePage({ store: storeOf(ALARM), now: at(21, 6, 40) }); await p.start();
   assert.equal(p.els.alwarn.hidden, false);
   p.els.alon.checked = false; p.els.alon.onchange();
   assert.equal(p.els.alwarn.hidden, true, 'alarm off');
