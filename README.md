@@ -37,11 +37,6 @@ timer on its own and the page does not need to stay connected.
   and once a day after 02:00 while the page is open. Settings are stored in a
   cookie (and, for local files, in localStorage). Details and limits are in the
   comment block of [`index.html`](index.html).
-- **Alarm from a routine:** the alarm check runs at every connection. A scheduled
-  routine on the device that opens the page at night (for example at 02:05) is
-  therefore enough, without keeping the page open all day. The alarm has to be
-  active, the bulb in range and not connected to another app. Whether Chrome runs
-  the page and Bluetooth with the screen off is untested.
 - **Closing warning:** with the alarm active and 1 to 6 weekdays selected, the
   heading "Alarm" shows "(you must leave this tab open)", because the weekday
   selection only works while the page runs. The page also asks before it is
@@ -114,6 +109,17 @@ and the GitHub Pages address, with both flags from step 4 set to Enabled
 longer in range." Not recorded, and therefore unknown: the Chrome version, and
 whether each flag is needed on its own or whether Chrome Stable works without
 them.
+
+## Tips
+
+- **Routine instead of an open tab:** the alarm check runs at every connection. A
+  scheduled routine on the device that opens the page at night (for example at
+  02:05) is therefore enough for the weekday alarm, without keeping the tab open
+  all day. The alarm has to be active, the bulb in range and not connected to
+  another app. Whether Chrome runs the page and Bluetooth with the screen off is
+  untested.
+- **One-tap sunset:** open the page with `?action=sunset` and use Chrome's "Add to
+  Home screen".
 
 ## Known limits
 
