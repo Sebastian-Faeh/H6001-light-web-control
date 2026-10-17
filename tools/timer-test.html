@@ -369,6 +369,13 @@ async function timedTest(name, enabled, report) {
   const start = stamp(when);
   const [sh, sm, eh, em] = windowFrom(start, 10);
   say(name, 'Writing the timer ...');
+  // Park the record with the other flag 12 h away, so that no two windows ever overlap during the test.
+  const far = new Date(when.getTime() + 12 * 3600000);
+  const [fh, fm, feh, fem] = windowFrom(stamp(far), 10);
+  log('=== parking the other record at ' + stamp(far) + ' (enabled=' + (enabled ? 0 : 1) + ') ===');
+  await send(timerFrame(1, fh, fm, feh, fem, !enabled)); await sleep(1500);
+  const parked = await readTimers('After parking');
+  report.push(name + ': parked other record at ' + stamp(far) + ' -> ' + parked.map((r, n) => 'pos ' + n + ': ' + tline(r)).join(' | '));
   log('=== ' + name + ': id 1, ' + start + ', 10 min, enabled=' + (enabled ? 1 : 0) + ' ===');
   await send(timeFrame(new Date())); await sleep(1000);
   await send(timerFrame(1, sh, sm, eh, em, enabled)); await sleep(1500);
