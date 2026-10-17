@@ -33,7 +33,9 @@ timer on its own and the page does not need to stay connected.
   (three dots), "Add to Home screen" turns it into a one-tap shortcut.
 - **Alarm:** wake time, duration, scene and weekdays. The bulb timer repeats
   every day and has no weekday, so the page enables it for the next start if that
-  weekday is selected and disables it otherwise. It checks at every connection
+  weekday is selected and writes a record with enabled byte 0 otherwise (**this does not
+  stop the bulb: tests showed that such a record still starts**, so unselected weekdays
+  are not skipped, see [PROTOCOL.md](PROTOCOL.md)). It checks at every connection
   and once a day after 02:00 while the page is open. Settings are stored in
   this browser (localStorage). Details and limits are in the
   comment block of [`index.html`](index.html).
@@ -137,7 +139,7 @@ advice.
 ## Known limits
 
 - The alarm works only while the page is open and the device is awake. Wake times
-  before 02:00 are not supported. Disabling the timer on unselected weekdays,
+  before 02:00 are not supported. Skipping unselected weekdays does not work (see above), and
   scene *On*, windows below 38 minutes and the length of the sunset scene are
   untested on the bulb. A manual Save is overwritten by the alarm at the next
   check while it is active.

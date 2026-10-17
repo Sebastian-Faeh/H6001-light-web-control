@@ -39,10 +39,9 @@ function makePage(opt = {}) {
   const writeChar = {
     async writeValueWithoutResponse(f) {
       sent.push(Array.from(f));
-      if (f[0] === 0x33 && f[1] === 0x0a) { if (f[2] === 1 && acceptTimerWrites) timers[1] = Array.from(f.slice(3, 8)); reply([0x33, 0x0a, ...zeros(17), 0x39]); }
+      if (f[0] === 0x33 && f[1] === 0x0a) { if (f[2] === 1 && acceptTimerWrites) timers[f[7] ? 1 : 0] = Array.from(f.slice(3, 8)); reply([0x33, 0x0a, ...zeros(17), 0x39]); }
       if (f[0] === 0xaa && f[1] === 0x0a) {
-        const sorted = [[0, timers[0]], [1, timers[1]]].sort((a, b) => a[1][0] - b[1][0]);
-        const [id, d] = sorted[f[2]]; reply([0xaa, 0x0a, id, ...d, ...zeros(12), 0]);
+        reply([0xaa, 0x0a, 1, ...timers[f[2]], ...zeros(12), 0]);        // both records carry id 1
       }
       if (f[0] === 0xaa && f[1] === 0x05) reply([0xaa, 0x05, ...(opt.mode || [4, 1]), ...zeros(15)]);
       if (f[0] === 0xaa && f[1] === 0x04) reply([0xaa, 0x04, 0x80, ...zeros(16)]);
@@ -312,13 +311,13 @@ test('alarm on connect: next start on an unselected weekday disables the timer a
   const k = frames(p);
   assert.ok(k.includes('33 0a 01 06 1e 07 0f 00'), k.join('|'));
   assert.ok(!k.some(f => f.startsWith('33 05 04')));
-  assert.deepEqual(p.timers[1], [6, 30, 7, 15, 0]);
+  assert.deepEqual(p.timers[0], [6, 30, 7, 15, 0]);   // observed: a write with enabled = 0 lands in position 0; the enabled record at position 1 stays
 });
 
 test('alarm: after the last selected day the timer is disabled in the night (check after 02:00)', async () => {
   const p = makePage({ store: storeOf(ALARM), now: at(24, 2, 30) }); await p.start();    // Saturday 02:30
   await until(() => /Timer written/.test(p.els.alstatus.textContent));
-  assert.deepEqual(p.timers[1], [6, 30, 7, 15, 0]);
+  assert.deepEqual(p.timers[0], [6, 30, 7, 15, 0]);   // observed: a write with enabled = 0 lands in position 0; the enabled record at position 1 stays
   assert.match(p.els.alstatus.textContent, /Last check: 2026-10-24/);
 });
 

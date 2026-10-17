@@ -150,7 +150,7 @@
   <p><b>Light:</b> after "On" the page reads brightness and colour from the bulb and moves the sliders. In a scene (sunrise or sunset) the bulb reports no colour, so only the brightness slider follows. Choosing a colour ends the scene.</p>
   <p><b>Timer:</b> saving sets the bulb clock, writes the timer to timer slot 1 (start and duration), selects the scene and reads the timer back as a check. Scene "On" sets a plain colour with the slider values instead of an animation. After saving, the bulb runs the timer on its own; the page does not need to stay connected. The timer repeats every day and has no weekday field. Short durations (15 minutes) are untested.</p>
   <p><b>Sunset now</b> selects the sunset scene and switches the bulb on. Link with the action preselected: add <code>?action=sunset</code> to the address (for example as a home-screen shortcut); the page then starts the sunset as soon as it is connected.</p>
-  <p><b>Alarm:</b> wake time, duration, scene and weekdays are stored in this browser (localStorage) and are not sent anywhere. The bulb cannot do weekdays, so the page enables the bulb timer for the next start if that weekday is selected and disables it otherwise. It checks at every connection, when the page becomes visible again and once a day after 02:00 (hourly timer) while the page is open; it does not run when the page is closed or the browser is asleep, and background timers may be delayed or stopped. With 1 to 6 weekdays selected the page must stay open (the heading shows a note); it asks before being closed, but Chrome on Android shows no question when a tab is closed. While a window is running nothing is changed. While the bulb is lit the scene is not changed. A manual Save is overwritten by the alarm at the next check while the alarm is active. Disabling the timer on unselected days is untested.</p>
+  <p><b>Alarm:</b> wake time, duration, scene and weekdays are stored in this browser (localStorage) and are not sent anywhere. The bulb cannot do weekdays, so the page enables the bulb timer for the next start if that weekday is selected and disables it otherwise. It checks at every connection, when the page becomes visible again and once a day after 02:00 (hourly timer) while the page is open; it does not run when the page is closed or the browser is asleep, and background timers may be delayed or stopped. With 1 to 6 weekdays selected the page must stay open (the heading shows a note); it asks before being closed, but Chrome on Android shows no question when a tab is closed. While a window is running nothing is changed. While the bulb is lit the scene is not changed. A manual Save is overwritten by the alarm at the next check while the alarm is active. <b>Known problem:</b> tests on the bulb (Oct 2026) showed that a record with enabled = 0 still starts its scene, and that it is stored next to, not instead of, the enabled record. Skipping unselected weekdays therefore does not work; see PROTOCOL.md.</p>
   <p>The bulb receives the time at every connection. Its own clock cannot be read, so the page does not compare times but always sets it. After the daylight-saving change on 25 Oct 2026, open the page once and connect.</p>
   <p>On load the page connects to the last used device if Chrome allows it. Otherwise the first tap on the page starts the search (Chrome only allows the search after a touch).</p>
   <p>Behaviour at the end of the timer window (switch off or not) has not been observed. Protocol details are in the source code.</p>
@@ -450,6 +450,10 @@ const SERVICE_UUID = '00010203-0405-0607-0809-0a0b0c0d1910';
 const CHAR_WRITE   = '00010203-0405-0607-0809-0a0b0c0d2b11';
 const CHAR_NOTIFY  = '00010203-0405-0607-0809-0a0b0c0d2b10';
 const TIMER_SLOT   = 1;   // id 1 is accepted by the bulb; id 0 was discarded in tests
+// Two records exist, both with id 1. Observed on the bulb (tools/timer-test.html, Oct 2026): a write with id 1
+// replaces the record at reply position 1 when enabled = 1 and at position 0 when enabled = 0 (6 of 6 writes).
+// The records are therefore kept by reply POSITION, not by the id byte. The mechanism is unknown.
+const slotFor = en => (en ? 1 : 0);
 
 function frame(bytes) {
   const f = new Uint8Array(20);
@@ -583,6 +587,7 @@ const CHECK_HOUR = 2;    // the alarm is checked once a day after 02:00 (and at 
 let pendingAction = null;
 try { pendingAction = new URLSearchParams(location.search).get('action'); } catch (e) { /* no URL */ }
 let recs = {};
+let readPos = 0;          // reply position of the record being read (both records carry id 1)
 let chain = Promise.resolve();
 
 function send(bytes, quiet) {
@@ -610,7 +615,7 @@ function setDuration(min) {                         // a duration that is not in
   }
 }
 function loadSlotIntoInputs() {
-  const r = recs[TIMER_SLOT];
+  const r = recs[1] || recs[0];             // the enabled record first
   if (!r) return;
   $('tstart').value = p2(r.sh) + ':' + p2(r.sm);
   setDuration(durationOf(r.sh, r.sm, r.eh, r.em));
@@ -620,7 +625,7 @@ function onNotify(ev) {
   const v = new Uint8Array(ev.target.value.buffer);
   if (v[0] === 0xaa && v[1] === 0x01) { lastPower = v[2] === 1; return; }
   log('RX ' + hex(v));
-  if (v[0] === 0xaa && v[1] === 0x0a && v[2] <= 1) { recs[v[2]] = decodeTimer(v); showStored(); }
+  if (v[0] === 0xaa && v[1] === 0x0a && v[2] <= 1) { recs[readPos] = decodeTimer(v); showStored(); }
   if (v[0] === 0xaa && v[1] === 0x04) $('bright').value = String(Math.max(1, v[2]));
   if (v[0] === 0xaa && v[1] === 0x05) {
     lastMode = { mode: v[2], scene: v[3] };
@@ -636,8 +641,8 @@ function onNotify(ev) {
 
 async function readSlots() {
   recs = {};
-  send([0xaa, 0x0a, 0x00]); await sleep(300);
-  send([0xaa, 0x0a, 0x01]); await sleep(600);
+  readPos = 0; send([0xaa, 0x0a, 0x00]); await sleep(300);
+  readPos = 1; send([0xaa, 0x0a, 0x01]); await sleep(600);
 }
 
 function setResult(text, cls) {
@@ -659,7 +664,7 @@ async function writeTimer(sh, sm, eh, em, en, sc) {
   if (sc !== null) sendScene(sc);
   await sleep(1500);
   await readSlots();
-  return sameTimer(recs[TIMER_SLOT], sh, sm, eh, em, en);
+  return sameTimer(recs[slotFor(en)], sh, sm, eh, em, en);
 }
 
 async function saveTimer() {
@@ -673,9 +678,9 @@ async function saveTimer() {
   busy = true; $('save').disabled = true; setResult('Saving ...');
   try {
     if (await writeTimer(sh, sm, eh, em, en, sc)) {
-      setResult('Saved and read back: ' + recs[TIMER_SLOT].text + '. Scene: ' + SCENE_NAMES[sc] + '.', 'ok');
+      setResult('Saved and read back: ' + recs[slotFor(en)].text + '. Scene: ' + SCENE_NAMES[sc] + '.', 'ok');
     } else {
-      setResult('The bulb did NOT accept the timer. Read back: ' + (recs[TIMER_SLOT] ? recs[TIMER_SLOT].text : 'nothing') + '. Please save again; if it fails again, send the log (under "Device and log").', 'bad');
+      setResult('The bulb did NOT accept the timer. Read back: ' + (recs[slotFor(en)] ? recs[slotFor(en)].text : 'nothing') + '. Please save again; if it fails again, send the log (under "Device and log").', 'bad');
     }
   } finally { busy = false; $('save').disabled = !wch; }
 }
@@ -940,7 +945,7 @@ async function runAlarm(reason) {
     if (!wch) { alarmNote = 'Bulb not reachable (' + reason + '); will retry.'; return; }
     if (wasConnected) { await readSlots(); await readLight(); }
     if (lastPower === null) { send([0xaa, 0x01], true); await sleep(500); }   // is the bulb lit?
-    const needTimer = !sameTimer(recs[TIMER_SLOT], plan.sh, plan.sm, plan.eh, plan.em, plan.en);
+    const needTimer = !sameTimer(recs[slotFor(plan.en)], plan.sh, plan.sm, plan.eh, plan.em, plan.en);
     const modeOk = !!lastMode && (alarm.scene === 2 ? lastMode.mode === 2 : lastMode.mode === 4 && lastMode.scene === alarm.scene);
     const lit = lastPower === true;
     let ok = true, note;
@@ -948,7 +953,7 @@ async function runAlarm(reason) {
     try {
       if (needTimer) {
         ok = await writeTimer(plan.sh, plan.sm, plan.eh, plan.em, plan.en, plan.en && !lit ? alarm.scene : null);
-        note = ok ? 'Timer written: ' + recs[TIMER_SLOT].text + '.' : 'The bulb did NOT accept the timer; will retry.';
+        note = ok ? 'Timer written: ' + recs[slotFor(plan.en)].text + '.' : 'The bulb did NOT accept the timer; will retry.';
         if (ok) loadSlotIntoInputs();
       } else if (plan.en && !modeOk && !lit) {
         sendScene(alarm.scene); await sleep(800); note = 'Scene set.';

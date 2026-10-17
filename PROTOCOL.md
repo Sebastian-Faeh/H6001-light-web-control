@@ -125,6 +125,17 @@ The official app's own writes to id 0 were accepted. Whether the bulb refuses
 id 0 itself, windows of 35 minutes or less (the only windows tried on id 0 were
 5, 15, 30 and 35 minutes), or something the app does beforehand is **unknown**. The page writes id 1 only and checks by read-back.
 
+## Findings from tools/timer-test.html (17 Oct 2026, one bulb)
+
+- `aa 0a 00` and `aa 0a 01` return two records, both with the id byte `01`. Key them by reply position, not by id.
+- A write `33 0a 01 ...` replaced the record at position 1 when the last byte was `01`, and the record at position 0
+  when it was `00` (6 of 6 writes, two runs). The mechanism is unknown.
+- A write with id `00` and last byte `01` did not store its times; it only changed the id of position 1 to 0.
+- A record with last byte `00` **did start** its scene at its start time (07:38, 17 Oct). A start by the other
+  record that was still inside its window cannot be excluded for this run; the 06:30 observation the same day agrees.
+  So the last byte is not a safe "off" switch, and the weekday alarm cannot skip days with it.
+- The bulb drops a connection that is idle for a few seconds unless a keep-alive (`aa 01` every 2 s) is sent.
+
 ## Open questions
 
 - Behaviour at the end of the timer window.
@@ -137,8 +148,9 @@ id 0 itself, windows of 35 minutes or less (the only windows tried on id 0 were
 - Whether a timer with scene "On" lights the bulb in the stored colour. The page
   sends `33 05 02 rr gg bb` and `33 04 vv` so that the stored mode is a plain
   colour (assumed).
-- Whether a timer record with the enabled byte `0` stays silent. The alarm relies
-  on it for unselected weekdays (assumed).
+- Whether the timer repeats every day (the two records stayed in the bulb after
+  they had started once; one-shot behaviour is excluded, daily repetition is not tested).
+- What the last byte of a timer write (called "enabled") really means. See the findings below.
 - Whether windows shorter than 38 minutes work in timer id 1 (the page offers
   15 minutes and up).
 - The lowest useful brightness value, and why the official app showed `0x64` (100)
