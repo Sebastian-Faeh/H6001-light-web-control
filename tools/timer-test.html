@@ -160,11 +160,11 @@ function log(m) {
 
 let device = null, wch = null, nch = null, waiter = null;
 let chain = Promise.resolve();
-function send(bytes) {
+function send(bytes, quiet) {
   chain = chain.then(async () => {
     if (!wch) return;
     const f = (bytes instanceof Uint8Array) ? bytes : frame(bytes);
-    log('TX ' + hex(f));
+    if (!quiet) log('TX ' + hex(f));
     try { if (wch.writeValueWithoutResponse) await wch.writeValueWithoutResponse(f); else await wch.writeValue(f); }
     catch (e) { log('Write error: ' + e.message); }
   });
@@ -450,6 +450,8 @@ $('issue').onclick = () => {
   $('resnote').textContent = 'GitHub opens with the text prefilled. Press "Submit new issue". The issue is public.';
   try { window.open(url, '_blank'); } catch (e) { /* ignore */ }
 };
+// The main page sends "aa 01" every 2 s like the official app; without it the bulb drops an idle connection after a few seconds.
+setInterval(() => { if (wch) send([0xaa, 0x01], true); }, 2000);
 async function guideLoop() { for (;;) { try { await runGuide(); } catch (e) { log('Guide error: ' + e.message); await ask('Error', e.message, [{ label: 'Start again', value: true }]); } } }
 window.addEventListener('load', () => { if (navigator.bluetooth) guideLoop(); else say('Web Bluetooth missing', 'Use Google Chrome.'); });
 setUi(false);

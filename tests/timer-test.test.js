@@ -40,7 +40,7 @@ function makePage() {
     document: { getElementById: mk, execCommand() { return true; } },
     navigator: { bluetooth: { async getDevices() { return [dev]; }, async requestDevice() { return dev; } }, clipboard: { async writeText() {} } },
     addEventListener(t, f) { if (t === 'load') onLoad = f; },
-    setTimeout, clearTimeout, console, Date, Promise, Uint8Array, Math, Number, Array, parseInt, Set,
+    setInterval() { return 0; }, setTimeout, clearTimeout, console, Date, Promise, Uint8Array, Math, Number, Array, parseInt, Set,
   };
   ctx.window = ctx;
   vm.createContext(ctx); vm.runInContext(code, ctx);
