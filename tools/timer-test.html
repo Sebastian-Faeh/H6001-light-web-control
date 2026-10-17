@@ -1,0 +1,306 @@
+<!doctype html>
+<!-- H6001 timer test (unofficial): guided experiments on the timer records of the Govee H6001 bulb. See ../PROTOCOL.md (open questions). Same licence as the main page (PolyForm Noncommercial 1.0.0, see ../LICENSE). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H6001 Timer Test</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 0 auto; padding: 10px 12px 30px; background:#111; color:#eee; font-size: .95rem; }
+  h1 { font-size: 1.1rem; margin: 4px 0 6px; }
+  h2 { font-size: .9rem; margin: 16px 0 4px; color:#9ab; border-bottom: 1px solid #2a2a2a; padding-bottom: 2px; }
+  button { font-size: .95rem; padding: 9px 12px; margin: 3px 4px 3px 0; border-radius: 8px; border: 0; background:#2b6; color:#000; min-height: 40px; }
+  button.neutral { background:#556; color:#fff; }
+  button.warn { background:#c84; color:#000; }
+  button:disabled { opacity: .4; }
+  input, select { font-size: 1rem; padding: 5px 6px; background:#222; color:#eee; border:1px solid #444; border-radius:6px; min-height: 38px; }
+  input[type=number] { width: 5.5em; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 4px 0; }
+  .field { display: flex; flex-direction: column; font-size: .75rem; color:#aaa; gap: 2px; }
+  p.hint { font-size: .8rem; color:#aaa; margin: 4px 0; }
+  #status, #expect { padding: 6px 8px; background:#1b1b24; border-radius: 6px; font-size:.85rem; margin: 6px 0; }
+  #expect { background:#3a3012; }
+  table { border-collapse: collapse; width: 100%; font-size: .8rem; margin: 6px 0; }
+  td, th { border: 1px solid #333; padding: 3px 6px; text-align: left; }
+  th { color:#9ab; font-weight: normal; }
+  #log { font-family: monospace; font-size: .7rem; color:#9c9; background:#0b0b0b; width:100%; height:260px; border:0; border-radius:6px; padding:6px; }
+  input[type=text] { width: 100%; font: .85rem monospace; }
+</style>
+</head>
+<body>
+<h1>H6001 Timer Test</h1>
+<p class="hint">Guided experiments for the open timer questions (see PROTOCOL.md). They overwrite timer records of the bulb; afterwards set your real timer or alarm again on the main page. Close the main page and the Govee app first: the bulb accepts one connection. Use Chrome.</p>
+
+<div class="row">
+  <button id="connect">Connect</button>
+  <button id="search" class="neutral">Search</button>
+  <button id="disconnect" class="neutral" disabled>Disconnect</button>
+</div>
+<div id="status">Not connected.</div>
+
+<h2>Read</h2>
+<div class="row">
+  <button id="read" disabled>Read timers</button>
+  <button id="readstate" class="neutral" disabled>Read state</button>
+</div>
+<table id="tbl"><tr><th>Position</th><th>Id</th><th>Start</th><th>End</th><th>Enabled</th></tr></table>
+<p class="hint">Position = the order of the bulb's replies to <code>aa 0a 00</code> and <code>aa 0a 01</code>. The id is the byte inside the reply.</p>
+
+<h2>Test 1: which record does a write replace?</h2>
+<p class="hint">Reads the timers, writes three records one after the other (id 1, id 1, id 0) and reads after each write. The times will make the bulb run its scene tonight unless you overwrite them. Note which of them actually start.</p>
+<div class="row">
+  <label class="field">Probe 1 (id 1) start <input type="time" id="p1" value="22:00"></label>
+  <label class="field">Probe 2 (id 1) start <input type="time" id="p2" value="23:00"></label>
+  <label class="field">Probe 3 (id 0) start <input type="time" id="p3" value="22:30"></label>
+  <label class="field">Length (min) <input type="number" id="plen" value="15" min="1" max="180"></label>
+</div>
+<button id="run1" class="warn" disabled>Run test 1</button>
+
+<h2>Test 2: does "enabled = 0" stop the start?</h2>
+<p class="hint">Sets the clock, writes one record that starts in a few minutes, reads it back and then disconnects. Stay away from the bulb page and do not reconnect until the start time has passed. Then tell Claude whether the bulb lit at the start time. The bulb should be off.</p>
+<div class="row">
+  <label class="field">Start in (min) <input type="number" id="in" value="4" min="2" max="60"></label>
+  <label class="field">Length (min) <input type="number" id="len" value="10" min="1" max="180"></label>
+  <label class="field">Enabled <select id="en"><option value="0">0 (off)</option><option value="1">1 (on)</option></select></label>
+  <label class="field">Id <select id="wid"><option value="1">1</option><option value="0">0</option></select></label>
+</div>
+<button id="run2" class="warn" disabled>Run test 2</button>
+<div id="expect" hidden></div>
+
+<h2>Raw command</h2>
+<input type="text" id="raw" value="aa 0a 00" disabled>
+<button id="sendraw" class="neutral" disabled>Send</button>
+
+<h2>Log</h2>
+<p class="hint">Copy the log after a test and paste it to Claude.</p>
+<button id="copylog" class="neutral">Copy log</button>
+<button id="clearlog" class="neutral">Clear</button>
+<textarea id="log" readonly></textarea>
+
+<script>
+// ==PURE-START==
+const SERVICE_UUID = '00010203-0405-0607-0809-0a0b0c0d1910';
+const CHAR_WRITE   = '00010203-0405-0607-0809-0a0b0c0d2b11';
+const CHAR_NOTIFY  = '00010203-0405-0607-0809-0a0b0c0d2b10';
+
+function frame(bytes) {
+  const f = new Uint8Array(20);
+  bytes.slice(0, 19).forEach((b, i) => f[i] = b & 255);
+  let x = 0;
+  for (let i = 0; i < 19; i++) x ^= f[i];
+  f[19] = x;
+  return f;
+}
+function hex(u8) { return Array.from(u8, b => b.toString(16).padStart(2, '0')).join(' '); }
+function parseHex(s) {
+  const t = s.replace(/0x/gi, ' ').replace(/[^0-9a-fA-F]+/g, ' ').trim();
+  if (!t) return [];
+  return t.split(' ').map(h => parseInt(h, 16));
+}
+function timeFrame(d) {
+  const off = -d.getTimezoneOffset();
+  const ep = Math.floor(d.getTime() / 1000);
+  const y = d.getFullYear();
+  return frame([0x33, 0x09, d.getHours(), d.getMinutes(), d.getSeconds(), d.getDay(),
+    1, Math.floor(Math.abs(off) / 60), Math.abs(off) % 60,
+    d.getDate(), d.getMonth() + 1, y & 255, y >> 8,
+    ep & 255, (ep >>> 8) & 255, (ep >>> 16) & 255, (ep >>> 24) & 255, 0, 0]);
+}
+function timerFrame(idx, sh, sm, eh, em, en) { return frame([0x33, 0x0a, idx, sh, sm, eh, em, en ? 1 : 0]); }
+function decodeTimer(v) {
+  const p = n => String(n).padStart(2, '0');
+  return { idx: v[2], sh: v[3], sm: v[4], eh: v[5], em: v[6], en: v[7] === 1,
+           text: p(v[3]) + ':' + p(v[4]) + ' to ' + p(v[5]) + ':' + p(v[6]) + (v[7] === 1 ? ', enabled' : ', off') };
+}
+// start "HH:MM" plus minutes -> [sh, sm, eh, em]
+function windowFrom(start, minutes) {
+  const [sh, sm] = start.split(':').map(Number);
+  const t = (sh * 60 + sm + minutes) % 1440;
+  return [sh, sm, Math.floor(t / 60), t % 60];
+}
+// ==PURE-END==
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const p2 = n => String(n).padStart(2, '0');
+const logLines = [];
+function log(m) {
+  logLines.push(new Date().toLocaleTimeString() + ' ' + m);
+  while (logLines.length > 500) logLines.shift();
+  $('log').value = logLines.join('\n');
+  $('log').scrollTop = 1e9;
+}
+
+let device = null, wch = null, nch = null, waiter = null;
+let chain = Promise.resolve();
+function send(bytes) {
+  chain = chain.then(async () => {
+    if (!wch) return;
+    const f = (bytes instanceof Uint8Array) ? bytes : frame(bytes);
+    log('TX ' + hex(f));
+    try { if (wch.writeValueWithoutResponse) await wch.writeValueWithoutResponse(f); else await wch.writeValue(f); }
+    catch (e) { log('Write error: ' + e.message); }
+  });
+  return chain;
+}
+function label(v) {
+  if (v[0] === 0xaa && v[1] === 0x04) return '  (brightness ' + v[2] + ')';
+  if (v[0] === 0xaa && v[1] === 0x01) return '  (power ' + (v[2] === 1 ? 'on' : 'off') + ')';
+  if (v[0] === 0xaa && v[1] === 0x0a) return '  (timer id ' + v[2] + ': ' + decodeTimer(v).text + ')';
+  if (v[0] === 0xaa && v[1] === 0x05) return '  (mode ' + hex(v.slice(2, 6)) + (v[2] === 4 ? ': scene ' + (v[3] === 0 ? 'sunrise' : v[3] === 1 ? 'sunset' : v[3]) : v[2] === 2 ? ': colour' : '') + ')';
+  return '';
+}
+function onNotify(ev) {
+  const v = new Uint8Array(ev.target.value.buffer);
+  if (v[0] === 0xaa && v[1] === 0x01 && !stateRead) return;      // keep-alive replies are not logged
+  log('RX ' + hex(v) + label(v));
+  if (waiter && v[0] === 0xaa && v[1] === 0x0a) { const w = waiter; waiter = null; w(decodeTimer(v)); }
+}
+let stateRead = false;
+
+// Ask for timer record n (0 or 1) and wait for the reply.
+function queryTimer(n) {
+  return new Promise(resolve => {
+    const t = setTimeout(() => { waiter = null; resolve(null); }, 2000);
+    waiter = r => { clearTimeout(t); resolve(r); };
+    send([0xaa, 0x0a, n]);
+  });
+}
+async function readTimers(title) {
+  const out = [];
+  for (const n of [0, 1]) { out.push(await queryTimer(n)); await sleep(150); }
+  const rows = out.map((r, n) => r ? ('pos ' + n + ': id ' + r.idx + ', ' + r.text) : ('pos ' + n + ': no reply'));
+  log((title ? title + ' -> ' : 'Timers -> ') + rows.join(' | '));
+  showTable(out);
+  return out;
+}
+function showTable(recs) {
+  const rows = recs.map((r, n) => '<tr><td>' + n + '</td>' + (r
+    ? '<td>' + r.idx + '</td><td>' + p2(r.sh) + ':' + p2(r.sm) + '</td><td>' + p2(r.eh) + ':' + p2(r.em) + '</td><td>' + (r.en ? 'yes' : 'no') + '</td>'
+    : '<td colspan="4">no reply</td>') + '</tr>').join('');
+  $('tbl').innerHTML = '<tr><th>Position</th><th>Id</th><th>Start</th><th>End</th><th>Enabled</th></tr>' + rows;
+}
+const same = (a, b) => !!a && !!b && a.idx === b.idx && a.sh === b.sh && a.sm === b.sm && a.eh === b.eh && a.em === b.em && a.en === b.en;
+
+function setUi(c) {
+  ['disconnect', 'read', 'readstate', 'run1', 'run2', 'raw', 'sendraw'].forEach(id => $(id).disabled = !c);
+  $('connect').disabled = c; $('search').disabled = c;
+  $('status').textContent = c ? 'Connected to ' + (device && device.name || '?') + '.' : 'Not connected.';
+}
+async function bind() {
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(SERVICE_UUID);
+  wch = await svc.getCharacteristic(CHAR_WRITE);
+  nch = await svc.getCharacteristic(CHAR_NOTIFY);
+  nch.addEventListener('characteristicvaluechanged', onNotify);
+  await nch.startNotifications();
+  setUi(true);
+  log('Connected, notifications active.');
+}
+function attach(dev) {
+  if (device === dev) return;
+  device = dev;
+  dev.addEventListener('gattserverdisconnected', () => { log('Disconnected.'); wch = nch = null; setUi(false); });
+}
+async function waitForAdvert(dev, ms) {
+  if (typeof dev.watchAdvertisements !== 'function') return;
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  let seen = false;
+  const on = () => { seen = true; };
+  dev.addEventListener('advertisementreceived', on);
+  try {
+    await dev.watchAdvertisements(ac ? { signal: ac.signal } : undefined);
+    const t0 = Date.now();
+    while (!seen && Date.now() - t0 < ms) await sleep(100);
+  } catch (e) { log('watchAdvertisements(): ' + e.message); }
+  finally { dev.removeEventListener('advertisementreceived', on); if (ac) ac.abort(); }
+}
+async function connectKnown() {
+  if (!navigator.bluetooth || !navigator.bluetooth.getDevices) { log('getDevices() not available: use "Search".'); return false; }
+  const devs = await navigator.bluetooth.getDevices();
+  if (!devs.length) { log('No known device: use "Search".'); return false; }
+  const dev = devs[0];
+  $('status').textContent = 'Looking for the bulb ...';
+  await waitForAdvert(dev, 10000);
+  attach(dev); await bind();
+  return true;
+}
+$('connect').onclick = async () => {
+  try { if (!(await connectKnown())) $('status').textContent = 'Not connected. Use "Search".'; }
+  catch (e) { log('Connection failed: ' + e.message); $('status').textContent = 'Not connected (' + e.message + ').'; }
+};
+$('search').onclick = async () => {
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE_UUID] });
+    attach(dev); log('Connecting to ' + (dev.name || dev.id) + ' ...'); await bind();
+  } catch (e) { log('Error: ' + e.name + ': ' + e.message); }
+};
+$('disconnect').onclick = () => { if (device) device.gatt.disconnect(); };
+window.addEventListener('load', () => {
+  if (!navigator.bluetooth) { $('status').textContent = 'Web Bluetooth is not available: use Google Chrome.'; log('Web Bluetooth not available.'); $('connect').disabled = true; $('search').disabled = true; return; }
+  $('connect').onclick();
+});
+
+$('read').onclick = () => readTimers('Read');
+$('readstate').onclick = async () => {
+  stateRead = true;
+  send([0xaa, 0x01]); await sleep(400); send([0xaa, 0x04]); await sleep(400); send([0xaa, 0x05, 0x01]); await sleep(600);
+  stateRead = false;
+};
+$('sendraw').onclick = () => { const b = parseHex($('raw').value); if (b.length) send(b); };
+
+let running = false;
+async function guarded(fn) { if (running || !wch) return; running = true; ['run1', 'run2'].forEach(id => $(id).disabled = true); try { await fn(); } finally { running = false; if (wch) ['run1', 'run2'].forEach(id => $(id).disabled = false); } }
+
+$('run1').onclick = () => guarded(async () => {
+  const len = Math.max(1, Number($('plen').value) || 15);
+  const probes = [['1', $('p1').value, 1], ['2', $('p2').value, 1], ['3', $('p3').value, 0]];
+  if (probes.some(p => !p[1])) { log('Probe time missing.'); return; }
+  log('=== Test 1 start ===');
+  let before = await readTimers('Baseline');
+  for (const [name, start, id] of probes) {
+    const [sh, sm, eh, em] = windowFrom(start, len);
+    log('Probe ' + name + ': write id ' + id + ', ' + p2(sh) + ':' + p2(sm) + ' to ' + p2(eh) + ':' + p2(em) + ', enabled');
+    await send(timerFrame(id, sh, sm, eh, em, true));
+    await sleep(1500);
+    const after = await readTimers('After probe ' + name);
+    const changed = after.map((r, n) => same(r, before[n]) ? null : n).filter(n => n !== null);
+    const hit = after.findIndex(r => r && r.sh === sh && r.sm === sm && r.eh === eh && r.em === em);
+    log('Probe ' + name + ' result: changed position(s) = ' + (changed.length ? changed.join(',') : 'none') + '; probe visible at position ' + (hit >= 0 ? hit : 'nowhere'));
+    before = after;
+  }
+  log('=== Test 1 done. Tell Claude which of the probe times (' + probes.map(p => p[1]).join(', ') + ') the bulb actually started, and paste the log. ===');
+});
+
+$('run2').onclick = () => guarded(async () => {
+  const inMin = Math.max(2, Number($('in').value) || 4), len = Math.max(1, Number($('len').value) || 10);
+  const id = Number($('wid').value), en = $('en').value === '1';
+  const when = new Date(Date.now() + inMin * 60000);
+  const start = p2(when.getHours()) + ':' + p2(when.getMinutes());
+  const [sh, sm, eh, em] = windowFrom(start, len);
+  log('=== Test 2 start: id ' + id + ', ' + start + ', length ' + len + ' min, enabled=' + (en ? 1 : 0) + ' ===');
+  await send(timeFrame(new Date())); await sleep(1000);
+  await send(timerFrame(id, sh, sm, eh, em, en)); await sleep(1500);
+  const after = await readTimers('After write');
+  const hit = after.findIndex(r => r && r.sh === sh && r.sm === sm);
+  log('Written record visible at position ' + (hit >= 0 ? hit : 'nowhere') + (hit >= 0 ? ', enabled=' + (after[hit].en ? 1 : 0) : ''));
+  await send([0x33, 0x05, 0x04, 0x00]); await sleep(1200);          // scene sunrise, as the main page does
+  log('Disconnecting now. Do not reconnect before ' + start + '.');
+  $('expect').hidden = false;
+  $('expect').textContent = 'Start time ' + start + ' (enabled=' + (en ? 1 : 0) + '). The bulb is disconnected. Watch the bulb at ' + start + ' and tell Claude: did it light (sunrise) at that time?';
+  device.gatt.disconnect();
+});
+
+$('copylog').onclick = async () => {
+  const text = logLines.join('\n');
+  try { await navigator.clipboard.writeText(text); log('Log copied.'); return; } catch (e) { /* fallback */ }
+  try { const l = $('log'); l.value = text; l.focus(); l.select(); l.setSelectionRange(0, text.length); log(document.execCommand('copy') ? 'Log copied (fallback).' : 'Copying is blocked: the log is selected, long-press and choose "Copy".'); }
+  catch (e) { log('Copying not possible: ' + e.message); }
+};
+$('clearlog').onclick = () => { logLines.length = 0; $('log').value = ''; };
+setUi(false);
+</script>
+</body>
+</html>

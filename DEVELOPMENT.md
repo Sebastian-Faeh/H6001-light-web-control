@@ -70,6 +70,10 @@ The tests only simulate `getDevices()` and `watchAdvertisements()`.
 
 ## Explore the protocol
 
+`tools/timer-test.html` runs the open timer experiments (see the open questions in
+[PROTOCOL.md](PROTOCOL.md)) as buttons and writes a copyable log. It is served by
+GitHub Pages next to the main page.
+
 1. Open `tools/lab.html`, connect and press "Read all". It sends the queries the
    official app sends when it opens.
 2. Change **one** setting in the official app (for example only the end time of

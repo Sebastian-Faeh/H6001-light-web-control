@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const NAMES = ['SERVICE_UUID', 'CHAR_WRITE', 'CHAR_NOTIFY', 'TIMER_SLOT', 'frame', 'hex', 'parseHex',
-  'timeFrame', 'timerFrame', 'decodeTimer', 'sameTimer', 'hsvToRgb', 'browserKind',
+  'timeFrame', 'timerFrame', 'decodeTimer', 'sameTimer', 'hsvToRgb', 'browserKind', 'windowFrom',
   'endFromDuration', 'durationOf', 'rgbToHsv', 'alarmPlan', 'alarmNeedsPage', 'nextAlarm', 'dayKey', 'cookieValue'];
 
 function readHtml(file) {

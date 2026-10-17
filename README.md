@@ -53,6 +53,7 @@ timer on its own and the page does not need to stay connected.
 | [`PROTOCOL.md`](PROTOCOL.md) | the reverse-engineered Bluetooth protocol, with a status label per item |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | running the tests, trying changes on a bulb, capturing the official app's traffic, adapting to another model |
 | [`tools/lab.html`](tools/lab.html) | raw command console for exploring the protocol |
+| [`tools/timer-test.html`](tools/timer-test.html) | guided experiments on the bulb's timer records (which record a write replaces, whether `enabled = 0` stops a start) |
 | [`tools/btsnoop_att.py`](tools/btsnoop_att.py) | lists the GATT traffic of an Android Bluetooth HCI snoop log |
 | [`tests/`](tests) | tests that run with Node.js and need no dependencies |
 

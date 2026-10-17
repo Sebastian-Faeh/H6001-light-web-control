@@ -87,7 +87,7 @@ test('the lab tool uses the same frame and clock code as the page', () => {
 test('the scripts of all HTML files parse without syntax errors', () => {
   const vm = require('node:vm');
   const { scriptOf } = require('./helpers');
-  for (const f of ['index.html', 'tools/lab.html']) assert.doesNotThrow(() => new vm.Script(scriptOf(f)), f);
+  for (const f of ['index.html', 'tools/lab.html', 'tools/timer-test.html']) assert.doesNotThrow(() => new vm.Script(scriptOf(f)), f);
 });
 
 test('endFromDuration and durationOf', () => {
