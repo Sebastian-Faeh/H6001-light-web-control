@@ -22,6 +22,13 @@
   p.hint { font-size: .8rem; color:#aaa; margin: 4px 0; }
   #status, #expect { padding: 6px 8px; background:#1b1b24; border-radius: 6px; font-size:.85rem; margin: 6px 0; }
   #expect { background:#3a3012; }
+  #guide { background:#1b1b24; border-radius: 8px; padding: 10px; }
+  #gtitle { font-weight: 600; margin-bottom: 4px; }
+  #gtext { font-size: .88rem; white-space: pre-wrap; margin-bottom: 6px; }
+  details { margin-top: 12px; }
+  summary { color:#9ab; padding: 6px 0; }
+  #resnote { font-size: .82rem; margin: 4px 0; color:#bdb; }
+  #restext { width:100%; height: 160px; font: .7rem monospace; background:#0b0b0b; color:#9c9; border:0; border-radius:6px; padding:6px; }
   table { border-collapse: collapse; width: 100%; font-size: .8rem; margin: 6px 0; }
   td, th { border: 1px solid #333; padding: 3px 6px; text-align: left; }
   th { color:#9ab; font-weight: normal; }
@@ -40,6 +47,23 @@
 </div>
 <div id="status">Not connected.</div>
 
+<h2>Guided test</h2>
+<div id="guide">
+  <div id="gtitle">Guided test</div>
+  <div id="gtext">Runs the timer experiments step by step and asks you what it needs to know. Takes about 15 minutes.</div>
+  <div class="row"><button id="gb0">Start guided test</button><button id="gb1" class="neutral" hidden></button><button id="gb2" class="neutral" hidden></button></div>
+</div>
+<div id="result" hidden>
+  <div class="row">
+    <button id="copyres">Copy result</button>
+    <button id="issue" class="neutral">Send as GitHub issue</button>
+  </div>
+  <div id="resnote"></div>
+  <textarea id="restext" readonly></textarea>
+</div>
+
+<details>
+<summary>Manual tools</summary>
 <h2>Read</h2>
 <div class="row">
   <button id="read" disabled>Read timers</button>
@@ -72,6 +96,7 @@
 <h2>Raw command</h2>
 <input type="text" id="raw" value="aa 0a 00" disabled>
 <button id="sendraw" class="neutral" disabled>Send</button>
+</details>
 
 <h2>Log</h2>
 <p class="hint">Copy the log after a test and paste it to Claude.</p>
@@ -154,11 +179,12 @@ function label(v) {
 }
 function onNotify(ev) {
   const v = new Uint8Array(ev.target.value.buffer);
+  if (v[0] === 0xaa && v[1] === 0x01 && powerWaiter) { const w = powerWaiter; powerWaiter = null; w(v[2] === 1); }
   if (v[0] === 0xaa && v[1] === 0x01 && !stateRead) return;      // keep-alive replies are not logged
   log('RX ' + hex(v) + label(v));
   if (waiter && v[0] === 0xaa && v[1] === 0x0a) { const w = waiter; waiter = null; w(decodeTimer(v)); }
 }
-let stateRead = false;
+let stateRead = false, powerWaiter = null;
 
 // Ask for timer record n (0 or 1) and wait for the reply.
 function queryTimer(n) {
@@ -240,7 +266,6 @@ $('search').onclick = async () => {
 $('disconnect').onclick = () => { if (device) device.gatt.disconnect(); };
 window.addEventListener('load', () => {
   if (!navigator.bluetooth) { $('status').textContent = 'Web Bluetooth is not available: use Google Chrome.'; log('Web Bluetooth not available.'); $('connect').disabled = true; $('search').disabled = true; return; }
-  $('connect').onclick();
 });
 
 $('read').onclick = () => readTimers('Read');
@@ -300,6 +325,133 @@ $('copylog').onclick = async () => {
   catch (e) { log('Copying not possible: ' + e.message); }
 };
 $('clearlog').onclick = () => { logLines.length = 0; $('log').value = ''; };
+
+// ---------- guided test ----------
+const REPO = 'Sebastian-Faeh/H6001-light-web-control';
+let gopts = [], gpending = null;
+function ask(title, text, options) {                    // shows a step and waits for a button
+  $('gtitle').textContent = title; $('gtext').textContent = text;
+  gopts = options;
+  [0, 1, 2].forEach(i => { const b = $('gb' + i), o = options[i]; b.hidden = !o; if (o) { b.textContent = o.label; b.className = o.cls || (i ? 'neutral' : ''); } });
+  return new Promise(res => { gpending = res; });
+}
+[0, 1, 2].forEach(i => { $('gb' + i).onclick = () => { if (gpending && gopts[i]) { const r = gpending; gpending = null; r(gopts[i].value); } }; });
+const say = (title, text) => { $('gtitle').textContent = title; $('gtext').textContent = text; [0, 1, 2].forEach(i => $('gb' + i).hidden = true); };
+const OK = [{ label: 'Continue', value: true }];
+
+function queryPower() {
+  return new Promise(resolve => {
+    const t = setTimeout(() => { powerWaiter = null; resolve(null); }, 2000);
+    powerWaiter = on => { clearTimeout(t); resolve(on); };
+    send([0xaa, 0x01]);
+  });
+}
+async function ensureConnected() {
+  while (!wch) {
+    say('Connecting', 'Connecting to the bulb ...');
+    try { if (await connectKnown()) return; } catch (e) { log('Connection failed: ' + e.message); }
+    const a = await ask('Not connected', 'The bulb was not found. Switch it on, close the main page and the Govee app, then try again, or choose it with Search.', [{ label: 'Try again', value: 'retry' }, { label: 'Search', value: 'search' }]);
+    if (a === 'search') { try { const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE_UUID] }); attach(dev); await bind(); } catch (e) { log('Search: ' + e.message); } }
+  }
+}
+const tline = r => r ? 'id ' + r.idx + ', ' + r.text : 'no reply';
+const stamp = d => p2(d.getHours()) + ':' + p2(d.getMinutes());
+
+// One timed experiment: bulb off -> write record starting in a few minutes -> disconnect -> countdown -> ask.
+async function timedTest(name, enabled, report) {
+  await ensureConnected();
+  const on = await queryPower();
+  if (on) {
+    const a = await ask(name, 'The bulb is lit. It should be off for this test.', [{ label: 'Switch it off', value: 'off' }, { label: 'Continue anyway', value: 'go' }]);
+    if (a === 'off') { send([0x33, 0x01, 0x00]); await sleep(1500); }
+  } else await ask(name, 'The bulb is off. The test writes a timer record that starts in about 4 minutes, then disconnects. Do not use the main page or the Govee app until the question appears.', [{ label: 'Start', value: true }]);
+  const when = new Date(Date.now() + 4 * 60000);
+  const start = stamp(when);
+  const [sh, sm, eh, em] = windowFrom(start, 10);
+  say(name, 'Writing the timer ...');
+  log('=== ' + name + ': id 1, ' + start + ', 10 min, enabled=' + (enabled ? 1 : 0) + ' ===');
+  await send(timeFrame(new Date())); await sleep(1000);
+  await send(timerFrame(1, sh, sm, eh, em, enabled)); await sleep(1500);
+  const after = await readTimers('After write');
+  const hit = after.findIndex(r => r && r.sh === sh && r.sm === sm);
+  const written = hit >= 0 ? 'position ' + hit + ', enabled=' + (after[hit].en ? 1 : 0) : 'nowhere (the bulb did not keep it)';
+  await send([0x33, 0x05, 0x04, 0x00]); await sleep(1200);
+  device.gatt.disconnect();
+  const t0 = when.getTime();
+  while (Date.now() < t0 + 90000) {
+    const left = Math.max(0, Math.round((t0 - Date.now()) / 1000));
+    say(name, 'Timer record written at ' + written + '.\nThe bulb starts a sunrise at ' + start + ' if the record works.\nWatch the bulb. ' + (left > 0 ? 'Time left: ' + Math.floor(left / 60) + ':' + p2(left % 60) : 'The start time has passed.'));
+    await sleep(500);
+  }
+  const ans = await ask(name, 'Did the bulb start a sunrise at ' + start + '?', [{ label: 'Yes, it started', value: 'yes' }, { label: 'No', value: 'no' }, { label: 'Not sure', value: 'unsure' }]);
+  report.push(name + ': record written at ' + written + '; start ' + start + '; enabled=' + (enabled ? 1 : 0) + '; bulb started: ' + ans);
+  return ans;
+}
+
+async function runGuide() {
+  const report = [];
+  await ask('Before you start', 'This guide changes timer records of the bulb. Afterwards you set your timer or alarm again on the main page.\n\nClose the main page and the Govee app (the bulb accepts one connection). The bulb needs power and must be in range.', [{ label: 'Start', value: true }]);
+  await ensureConnected();
+  log('=== Guided test start ===');
+  say('Step 1: reading the timers', 'Reading both timer positions ...');
+  const base = await readTimers('Baseline');
+  report.push('Baseline: pos 0: ' + tline(base[0]) + ' | pos 1: ' + tline(base[1]));
+  await ask('Step 1 done', 'The bulb holds:\nposition 0: ' + tline(base[0]) + '\nposition 1: ' + tline(base[1]), OK);
+
+  say('Step 2: which record does a write replace?', 'Writing three probe records and reading after each ...');
+  let before = base;
+  const lines = [];
+  for (const [name, start, id] of [['probe 1', '22:00', 1], ['probe 2', '23:00', 1], ['probe 3', '22:30', 0]]) {
+    const [sh, sm, eh, em] = windowFrom(start, 15);
+    await ensureConnected();
+    await send(timerFrame(id, sh, sm, eh, em, true)); await sleep(1500);
+    const after = await readTimers('After ' + name);
+    const changed = after.map((r, n) => (r && before[n] && r.idx === before[n].idx && r.sh === before[n].sh && r.sm === before[n].sm && r.eh === before[n].eh && r.em === before[n].em && r.en === before[n].en) ? null : n).filter(n => n !== null);
+    const hit = after.findIndex(r => r && r.sh === sh && r.sm === sm && r.eh === eh && r.em === em);
+    lines.push(name + ' (write id ' + id + ', ' + start + '): changed position(s) ' + (changed.length ? changed.join(',') : 'none') + '; visible at ' + (hit >= 0 ? 'position ' + hit : 'nowhere'));
+    before = after;
+  }
+  report.push('Test 1 (probes, enabled=1):\n  ' + lines.join('\n  '));
+  await ask('Step 2 done', lines.join('\n') + '\n\nThe probe times (22:00, 22:30, 23:00) may start tonight; set your real timer afterwards.', OK);
+
+  const control = await timedTest('Step 3: control (enabled = 1)', true, report);
+  if (control !== 'yes') {
+    await ask('Control did not start', 'The control record (enabled = 1) did not start a sunrise, so the next test would prove nothing. Possible reasons: the bulb was lit, the clock or the record was not accepted, or the sunrise needs more time. The result is added to the report.', OK);
+  } else {
+    await timedTest('Step 4: enabled = 0', false, report);
+  }
+  await ensureConnected();
+  const fin = await readTimers('Final');
+  report.push('Final: pos 0: ' + tline(fin[0]) + ' | pos 1: ' + tline(fin[1]));
+  log('=== Guided test done ===');
+  await deliver(report);
+}
+
+function buildReport(report) {
+  return 'H6001 timer test, ' + new Date().toLocaleString() + '\n' + report.join('\n') + '\n\n--- log ---\n' + logLines.join('\n');
+}
+async function copyOut(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall through */ }
+  try { const t = $('restext'); t.focus(); t.select(); t.setSelectionRange(0, text.length); return !!document.execCommand('copy'); } catch (e) { return false; }
+}
+let lastReport = '';
+async function deliver(report) {
+  lastReport = buildReport(report);
+  $('result').hidden = false; $('restext').value = lastReport;
+  const ok = await copyOut(lastReport);
+  $('resnote').textContent = ok ? 'The result is in the clipboard. Paste it into the chat with Claude.' : 'Copying was blocked. Tap "Copy result", or select the text below and copy it.';
+  await ask('Finished', ok ? 'The result was copied to the clipboard. Paste it into the chat with Claude (or use "Send as GitHub issue" below).' : 'Tap "Copy result" below and paste it into the chat with Claude (or use "Send as GitHub issue").', [{ label: 'Run again', value: true }]);
+}
+$('copyres').onclick = async () => { $('resnote').textContent = (await copyOut(lastReport)) ? 'Copied. Paste it into the chat with Claude.' : 'Copying is blocked: the text below is selected, long-press and choose "Copy".'; };
+// GitHub opens a new issue with the text prefilled; the issue is public (device name shortened).
+$('issue').onclick = () => {
+  const body = lastReport.replace(/Minger_H6001_[0-9A-Fa-f]{4}/g, 'Minger_H6001_xxxx').slice(0, 5500);
+  const url = 'https://github.com/' + REPO + '/issues/new?title=' + encodeURIComponent('Timer test result') + '&body=' + encodeURIComponent(body);
+  $('resnote').textContent = 'GitHub opens with the text prefilled. Press "Submit new issue". The issue is public.';
+  try { window.open(url, '_blank'); } catch (e) { /* ignore */ }
+};
+async function guideLoop() { for (;;) { try { await runGuide(); } catch (e) { log('Guide error: ' + e.message); await ask('Error', e.message, [{ label: 'Start again', value: true }]); } } }
+window.addEventListener('load', () => { if (navigator.bluetooth) guideLoop(); else say('Web Bluetooth missing', 'Use Google Chrome.'); });
 setUi(false);
 </script>
 </body>

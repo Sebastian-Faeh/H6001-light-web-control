@@ -9,7 +9,8 @@ const vm = require('node:vm');
 const { scriptOf, loadPure } = require('./helpers');
 
 const code = scriptOf('tools/timer-test.html');
-const IDS = ['connect', 'search', 'disconnect', 'read', 'readstate', 'tbl', 'p1', 'p2', 'p3', 'plen', 'run1', 'in', 'len', 'en', 'wid', 'run2', 'expect', 'raw', 'sendraw', 'copylog', 'clearlog', 'log', 'status'];
+const IDS = ['connect', 'search', 'disconnect', 'read', 'readstate', 'tbl', 'p1', 'p2', 'p3', 'plen', 'run1', 'in', 'len', 'en', 'wid', 'run2', 'expect', 'raw', 'sendraw', 'copylog', 'clearlog', 'log', 'status', 'gtitle', 'gtext', 'gb0', 'gb1', 'gb2', 'result', 'copyres', 'issue', 'resnote', 'restext'];
+const until = async f => { for (let i = 0; i < 200 && !f(); i++) await wait(100); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 function makePage() {
@@ -43,7 +44,7 @@ function makePage() {
   };
   ctx.window = ctx;
   vm.createContext(ctx); vm.runInContext(code, ctx);
-  return { els, sent, slots, get disconnects() { return disconnects; }, start: async () => { await onLoad(); await wait(50); } };
+  return { els, sent, slots, get disconnects() { return disconnects; }, start: async () => { await onLoad(); await wait(20); await els.connect.onclick(); await wait(50); }, load: async () => { await onLoad(); await wait(20); } };
 }
 
 test('connects on load through getDevices() and reads both timer positions', async () => {
@@ -94,4 +95,16 @@ test('windowFrom adds minutes and wraps past midnight', () => {
   const T = loadPure('tools/timer-test.html');
   assert.deepEqual(T.windowFrom('22:00', 15), [22, 0, 22, 15]);
   assert.deepEqual(T.windowFrom('23:50', 20), [23, 50, 0, 10]);
+});
+
+test('guided test asks step by step and reports which position each probe changed', async () => {
+  const p = makePage(); await p.load();
+  assert.equal(p.els.gtitle.textContent, 'Before you start');
+  p.els.gb0.onclick(); await until(() => p.els.gtitle.textContent === 'Step 1 done');
+  assert.match(p.els.gtext.textContent, /position 0: id 1, 06:30 to 07:15, off/);
+  p.els.gb0.onclick(); await until(() => p.els.gtitle.textContent === 'Step 2 done');
+  assert.match(p.els.gtext.textContent, /probe 1 \(write id 1, 22:00\): changed position\(s\) 0; visible at position 0/);
+  assert.match(p.els.gtext.textContent, /probe 3 \(write id 0, 22:30\)/);
+  assert.deepEqual(p.sent.filter(f => f[1] === 0x0a && f[0] === 0x33).map(f => f.slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join(' ')).slice(0, 3),
+    ['33 0a 01 16 00 16 0f 01', '33 0a 01 17 00 17 0f 01', '33 0a 00 16 1e 16 2d 01']);
 });
