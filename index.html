@@ -158,7 +158,7 @@
 
 <details>
   <summary>Tips</summary>
-  <p><b>Routine instead of an open tab:</b> the alarm check runs at every connection. A routine on the device (for example a scheduled routine that opens a web address) can open this page at night, e.g. at 02:05, so the weekday alarm does not need the tab open all day. The alarm must be active, the bulb in range and not connected to another app. Whether it works with the screen off is untested.</p>
+  <p><b>Nightly alarm update by a routine:</b> on a Samsung tablet, create a routine in "Modes and Routines": condition "Time" (every day, e.g. 02:05), action "Open app" or "Open web page" (the menu names differ between versions) with the address <code>https://sebastian-faeh.github.io/H6001-light-web-control/?action=alarm</code> in Chrome. The page connects to the bulb (up to 5 tries, 30 s apart), brings the bulb timer in line with the alarm settings stored in this browser, disconnects and tries to close itself; if Chrome does not allow that, the page stays open and says so. The alarm must be active, the bulb in range and not connected to another app. Whether it works with the screen off is untested.</p>
   <p><b>One-tap sunset:</b> add <code>?action=sunset</code> to the address and use Chrome's "Add to Home screen".</p>
 </details>
 
@@ -254,6 +254,8 @@
    connected (once per page load). With Chrome "Add to Home screen" on an https
    address this gives a one-tap shortcut, for example
    https://sebastian-faeh.github.io/H6001-light-web-control/?action=sunset
+   index.html?action=alarm    runs the alarm update once the bulb is connected,
+   then disconnects and closes the page (see ALARM, timed start by a routine).
    The bulb must be reachable, see AUTOMATIC RECONNECTION.
 
  ALARM
@@ -274,14 +276,14 @@
    The scene is set together with the timer; it is not changed while the bulb
    is lit, because selecting a scene on a lit bulb may start it. A manual "Save"
    is overwritten by the alarm at the next check while the alarm is active.
-   Timed start by a routine: the check also runs at every connection, so
-   something that opens the page at night does the job without the page staying
-   open all day, for example a scheduled routine on the device that opens
-   https://sebastian-faeh.github.io/H6001-light-web-control/ at 02:05. The
-   alarm must be active (it is stored in localStorage), the bulb in range and
-   not connected to another app. Whether Chrome runs the page and Bluetooth
-   while the screen is off is not known; try it. A page that stays open
-   afterwards keeps the bulb connected.
+   Timed start by a routine: open
+   https://sebastian-faeh.github.io/H6001-light-web-control/?action=alarm
+   at night (for example 02:05) from a scheduled routine of the device. The page
+   connects (5 tries, 30 s apart), runs the alarm update, disconnects and
+   closes itself with window.close(); if Chrome refuses, the page stays open and
+   says so. The alarm must be active (it is stored in localStorage), the bulb in
+   range and not connected to another app. Whether Chrome runs the page and
+   Bluetooth while the screen is off is not known; try it.
    Closing warning: while the alarm is active and 1 to 6 weekdays are selected,
    the page that holds the bulb asks for confirmation before it is closed or
    left (beforeunload). With 0 or 7 weekdays the page is not needed and does
@@ -734,6 +736,7 @@ async function bind() {
   await readLight();
   let acted = false;
   if (pendingAction === 'sunset') { pendingAction = null; acted = true; log('URL action: sunset now'); await sunsetNow(); }
+  if (pendingAction === 'alarm') { pendingAction = null; acted = true; setTimeout(alarmUrlAction, 300); }
   if (alarm.on && !acted) setTimeout(() => runAlarm('connect'), 300);
 }
 
@@ -835,10 +838,15 @@ async function startup() {
   const dev = devs.find(d => d.id === savedId) || devs[0];
   knownDev = dev;
   log('Auto-connecting to ' + (dev.name || dev.id) + ' ...');
-  try { setStatus('Looking for the bulb ...'); await waitForAdvert(dev, 10000); attach(dev); await bind(); }
-  catch (e) {
-    log('Auto-connection failed: ' + e.message);
-    setStatus('Bulb not reachable (' + e.message + '). Switched on, in range and not connected to another app? "Connect" tries again, "Search" selects the device again.');
+  for (let n = 1; ; n++) {
+    try { setStatus('Looking for the bulb ...'); await waitForAdvert(dev, 10000); attach(dev); await bind(); return; }
+    catch (e) {
+      log('Auto-connection failed: ' + e.message);
+      setStatus('Bulb not reachable (' + e.message + '). Switched on, in range and not connected to another app? "Connect" tries again, "Search" selects the device again.');
+      if (pendingAction !== 'alarm' || n >= 5) return;           // launched by the routine: try again for a few minutes
+      setStatus('Bulb not reachable (' + e.message + '). Retrying in 30 s (' + n + '/5).');
+      await sleep(30000);
+    }
   }
 }
 window.addEventListener('load', startup);
@@ -933,16 +941,16 @@ function showAlarm() {
 // page is open. It never touches the timer while the window is running, and it does not change the
 // scene while the bulb is lit (setting a scene on a lit bulb may start it).
 async function runAlarm(reason) {
-  if (!alarm.on || alarmRunning || yielded || busy) return;
+  if (!alarm.on || alarmRunning || yielded || busy) return null;      // null: not applicable now
   alarmRunning = true;
   try {
     const now = new Date();
     const plan = alarmPlan(now, alarm);
-    if (plan.skip) { alarmNote = 'A window is running; nothing changed.'; return; }
+    if (plan.skip) { alarmNote = 'A window is running; nothing changed.'; return true; }
     const wasConnected = !!wch;
-    if (!wasConnected && !knownDev) { alarmNote = 'No known bulb yet: connect once with Search, then the alarm can reconnect by itself.'; return; }
+    if (!wasConnected && !knownDev) { alarmNote = 'No known bulb yet: connect once with Search, then the alarm can reconnect by itself.'; return false; }
     if (!wasConnected) await connectKnown();
-    if (!wch) { alarmNote = 'Bulb not reachable (' + reason + '); will retry.'; return; }
+    if (!wch) { alarmNote = 'Bulb not reachable (' + reason + '); will retry.'; return false; }
     if (wasConnected) { await readSlots(); await readLight(); }
     if (lastPower === null) { send([0xaa, 0x01], true); await sleep(500); }   // is the bulb lit?
     const needTimer = !sameTimer(recs[slotFor(plan.en)], plan.sh, plan.sm, plan.eh, plan.em, plan.en);
@@ -963,8 +971,10 @@ async function runAlarm(reason) {
     alarmNote = note;
     if (ok && now.getHours() >= CHECK_HOUR) { alarm.last = dayKey(now); jar.set(JSON.stringify(alarm)); }
     log('Alarm (' + reason + '): ' + note);
+    return ok;
   } catch (e) {
     alarmNote = 'Error: ' + e.message; log('Alarm error: ' + e.message);
+    return false;
   } finally { alarmRunning = false; showAlarm(); }
 }
 async function alarmTick() {
@@ -974,6 +984,28 @@ async function alarmTick() {
   if (Date.now() - lastAlarmTry < 300000) return;   // at most one attempt per 5 minutes
   lastAlarmTry = Date.now();
   await runAlarm('daily check');
+}
+// ?action=alarm: meant for a nightly routine of the tablet (see the Tips). Connects, brings the bulb
+// timer in line with the alarm settings (like the daily check), disconnects and closes the page.
+// Chrome allows window.close() only for some tabs; if it refuses, the page says so and stays open.
+function finishUrlAction(msg) {
+  log('URL action finished: ' + msg);
+  try { if (device && device.gatt) device.gatt.disconnect(); } catch (e) { /* ignore */ }
+  setTimeout(() => setStatus(msg + ' Closing this page.'), 300);      // after the disconnect handler's own status text
+  setTimeout(() => {
+    try { window.close(); } catch (e) { /* ignore */ }
+    setTimeout(() => setStatus(msg + ' The page could not close itself; you can close it.'), 800);
+  }, 1500);
+}
+async function alarmUrlAction() {
+  log('URL action: alarm update');
+  for (let n = 1; n <= 3; n++) {
+    const r = await runAlarm('URL action');
+    if (r === null && !alarm.on) { finishUrlAction('The alarm is off; nothing to update.'); return; }
+    if (r) { finishUrlAction('Alarm updated. ' + alarmNote); return; }
+    if (n < 3) { setStatus('Alarm update failed (' + alarmNote + '). Retrying in 30 s (' + n + '/3).'); await sleep(30000); }
+  }
+  setStatus('Alarm update failed: ' + alarmNote + ' The page stays open.');
 }
 ['alon', 'altime', 'aldur', 'alscene', 'alday0', 'alday1', 'alday2', 'alday3', 'alday4', 'alday5', 'alday6'].forEach(id => $(id).onchange = alarmFromUi);
 $('alapply').onclick = async () => {

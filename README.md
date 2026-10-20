@@ -127,12 +127,17 @@ advice.
 
 ## Tips
 
-- **Routine instead of an open tab:** the alarm check runs at every connection. A
-  scheduled routine on the device that opens the page at night (for example at
-  02:05) is therefore enough for the weekday alarm, without keeping the tab open
-  all day. The alarm has to be active, the bulb in range and not connected to
-  another app. Whether Chrome runs the page and Bluetooth with the screen off is
-  untested.
+- **Nightly alarm update by a routine:** on a Samsung tablet create a routine in
+  "Modes and Routines": condition "Time" (every day, for example 02:05), action
+  "Open app" or "Open web page" (menu names differ between versions) with the
+  address
+  <https://sebastian-faeh.github.io/H6001-light-web-control/?action=alarm> in
+  Chrome. The page connects (5 tries, 30 s apart), brings the bulb timer in line
+  with the alarm settings stored in the browser, disconnects and tries to close
+  itself; if Chrome refuses, the page stays open and says so. The alarm has to be
+  active, the bulb in range and not connected to another app. Whether it works with
+  the screen off is untested. Skipping unselected weekdays does not work (see
+  Known limits).
 - **One-tap sunset:** open the page with `?action=sunset` and use Chrome's "Add to
   Home screen".
 

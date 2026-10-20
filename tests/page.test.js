@@ -64,6 +64,7 @@ function makePage(opt = {}) {
   let cookieJar = opt.cookie || ''; const intervals = []; const docEvents = {}, winEvents = {};
   const channels = [];
   class FakeChannel { constructor(n) { this.name = n; this.posted = []; channels.push(this); } postMessage(m) { this.posted.push(m); } }
+  let closes = 0;
   const RealDate = Date;
   class FakeDate extends RealDate { constructor(...a) { if (a.length === 0 && opt.now) super(opt.now); else super(...a); } static now() { return opt.now || RealDate.now(); } }
   const ctx = {
@@ -72,14 +73,14 @@ function makePage(opt = {}) {
     navigator: { bluetooth: bt, userAgent: opt.ua || 'Chrome/140', userAgentData: opt.brands ? { brands: opt.brands } : undefined, clipboard: { async writeText() {} } },
     localStorage: { getItem(k) { return k in storage ? storage[k] : null; }, setItem(k, v) { storage[k] = String(v); } },
     addEventListener(t, f) { if (t === 'load') onLoad = f; else winEvents[t] = f; },
-    URLSearchParams,
+    URLSearchParams, close() { closes++; },
     location: opt.search !== undefined ? { search: opt.search, protocol: 'https:' } : undefined,
     BroadcastChannel: opt.noChannel ? undefined : FakeChannel,
     setTimeout, setInterval: (f, ms) => { intervals.push([f, ms]); return 0; }, console, Date: FakeDate, Promise, Uint8Array, Math, Number, Array, parseInt, Set,
   };
   ctx.window = ctx;
   vm.createContext(ctx); vm.runInContext(code, ctx);
-  return { els, sent, clicks, timers, dev, channels, intervals, storage, docEvents, winEvents, get cookie() { return cookieJar; }, get disconnects() { return disconnects; }, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
+  return { els, sent, clicks, timers, dev, channels, intervals, storage, docEvents, winEvents, get cookie() { return cookieJar; }, get disconnects() { return disconnects; }, get closes() { return closes; }, get requested() { return requested; }, get watched() { return watched; }, start: async () => { await onLoad(); await wait(30); } };
 }
 
 test('connects automatically to a known device, sets the clock and loads the stored timer', async () => {
@@ -408,4 +409,21 @@ test('"you must leave this tab open" shows next to Alarm only while the weekday 
   assert.equal(p.els.alwarn.hidden, true, 'all seven days');
   p.els.alday0.checked = false; p.els.alon.onchange();
   assert.equal(p.els.alwarn.hidden, false, 'six days');
+});
+
+test('?action=alarm updates the bulb timer once, disconnects and closes the page', async () => {
+  const p = makePage({ search: '?action=alarm', store: storeOf(ALARM), now: at(21, 2, 5) }); await p.start();
+  await until(() => p.closes > 0);
+  assert.equal(frames(p).filter(f => f.startsWith('33 0a')).length, 1, 'exactly one timer write');
+  assert.ok(frames(p).includes('33 0a 01 06 1e 07 0f 01'), frames(p).join('|'));
+  assert.deepEqual(p.timers[1], [6, 30, 7, 15, 1]);
+  assert.ok(p.disconnects >= 1, 'the bulb is released');
+  assert.equal(p.closes, 1);
+});
+
+test('?action=alarm with the alarm off changes nothing and closes the page', async () => {
+  const p = makePage({ search: '?action=alarm', store: storeOf({ ...ALARM, on: false }), now: at(21, 2, 5) }); await p.start();
+  await until(() => p.closes > 0);
+  assert.equal(frames(p).filter(f => f.startsWith('33 0a')).length, 0);
+  assert.match(p.els.status.textContent, /alarm is off/i);
 });
