@@ -358,7 +358,7 @@ const tline = r => r ? 'id ' + r.idx + ', ' + r.text : 'no reply';
 const stamp = d => p2(d.getHours()) + ':' + p2(d.getMinutes());
 
 // One timed experiment: bulb off -> write record starting in a few minutes -> disconnect -> countdown -> ask.
-async function timedTest(name, enabled, report) {
+async function timedTest(name, enabled, report, minutes = 10) {
   await ensureConnected();
   const on = await queryPower();
   if (on) {
@@ -367,7 +367,7 @@ async function timedTest(name, enabled, report) {
   } else await ask(name, 'The bulb is off. The test writes a timer record that starts in about 4 minutes, then disconnects. Do not use the main page or the Govee app until the question appears.', [{ label: 'Start', value: true }]);
   const when = new Date(Date.now() + 4 * 60000);
   const start = stamp(when);
-  const [sh, sm, eh, em] = windowFrom(start, 10);
+  const [sh, sm, eh, em] = windowFrom(start, minutes);
   say(name, 'Writing the timer ...');
   // Park the record with the other flag 12 h away, so that no two windows ever overlap during the test.
   const far = new Date(when.getTime() + 12 * 3600000);
@@ -376,7 +376,7 @@ async function timedTest(name, enabled, report) {
   await send(timerFrame(1, fh, fm, feh, fem, !enabled)); await sleep(1500);
   const parked = await readTimers('After parking');
   report.push(name + ': parked other record at ' + stamp(far) + ' -> ' + parked.map((r, n) => 'pos ' + n + ': ' + tline(r)).join(' | '));
-  log('=== ' + name + ': id 1, ' + start + ', 10 min, enabled=' + (enabled ? 1 : 0) + ' ===');
+  log('=== ' + name + ': id 1, ' + start + ', ' + minutes + ' min, enabled=' + (enabled ? 1 : 0) + ' ===');
   await send(timeFrame(new Date())); await sleep(1000);
   await send(timerFrame(1, sh, sm, eh, em, enabled)); await sleep(1500);
   const after = await readTimers('After write');
@@ -426,6 +426,7 @@ async function runGuide() {
     await ask('Control did not start', 'The control record (enabled = 1) did not start a sunrise, so the next test would prove nothing. Possible reasons: the bulb was lit, the clock or the record was not accepted, or the sunrise needs more time. The result is added to the report.', OK);
   } else {
     await timedTest('Step 4: enabled = 0', false, report);
+    await timedTest('Step 5: zero-length window (start = end), enabled = 1', true, report, 0);
   }
   await ensureConnected();
   const fin = await readTimers('Final');
